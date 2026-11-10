@@ -15,7 +15,8 @@ dependencies:
   go_router: ^14.6.2
   google_fonts: ^6.2.1
   flutter_svg: ^2.0.16
-  lucide_icons: ^0.257.0
+  lucide_icons:
+    path: packages/lucide_icons
   cached_network_image: ^3.4.1
   supabase_flutter: ^2.8.0
   intl: any

@@ -1,0 +1,12 @@
+name: lucide_icons
+description: طبقة توافق محلية — نفس أسماء أيقونات Lucide المستخدمة في التطبيق، مبنية على lucide_icons_flutter المتوافقة مع Flutter الحالي.
+version: 1.0.0
+publish_to: "none"
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  lucide_icons_flutter: ">=3.0.0 <4.0.0"

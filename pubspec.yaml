@@ -11,20 +11,13 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-
-  # الحالة والتنقل
   flutter_riverpod: ^2.6.1
   go_router: ^14.6.2
-
-  # الواجهة
   google_fonts: ^6.2.1
   flutter_svg: ^2.0.16
+  lucide_icons: ^0.257.0
   cached_network_image: ^3.4.1
-
-  # الخادم (يُربط في مرحلة لاحقة)
   supabase_flutter: ^2.8.0
-
-  # أدوات
   intl: any
   image_picker: ^1.1.2
 

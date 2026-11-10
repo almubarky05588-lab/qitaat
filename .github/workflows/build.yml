@@ -1,0 +1,29 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate platform folders
+        run: |
+          if [ ! -d android ]; then
+            flutter create --org sa.almubarky --project-name qitaat --platforms=android,ios .
+            rm -f test/widget_test.dart
+          fi
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - run: flutter build apk --debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qitaat-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk

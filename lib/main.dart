@@ -5,10 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/router.dart';
 import 'core/theme.dart';
 import 'data/api.dart';
+import 'data/mock.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initBackend();
+  // القوائم من لوحة الإدارة (بحد أقصى 4 ثواني، وإلا نكمل بالقيم الاحتياطية)
+  await Mock.load().timeout(const Duration(seconds: 4), onTimeout: () {});
   runApp(const ProviderScope(child: QitaatApp()));
 }
 

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../app/state.dart';
 import '../core/media.dart';
 import '../core/product_widgets.dart';
 import '../core/theme.dart';
@@ -208,6 +207,15 @@ class AccountScreen extends ConsumerWidget {
                 Text('جديد', style: tx(19, w: w6, h: 1.3)),
               ]),
             ),
+            if (!p.verified)
+              GestureDetector(
+                onTap: () => context.push('/edit-profile'),
+                child: InfoBox(p.verifyStatus == 'pending'
+                    ? 'طلب توثيق متجرك قيد المراجعة'
+                    : p.verifyStatus == 'rejected'
+                        ? 'طلب التوثيق مرفوض${p.verifyNote != null ? ' — ${p.verifyNote}' : ''}. أعد رفع السجل التجاري من تعديل الملف'
+                        : 'وثّق متجرك برفع صورة السجل التجاري من تعديل الملف — يظهر لك شارة «تاجر موثّق»'),
+              ),
             VCol(gap: 10, cross: CrossAxisAlignment.start, [
               Text('تخصص المحل', style: tx(14, w: w5)),
               p.brands.isEmpty
@@ -268,7 +276,7 @@ class EditProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
-  bool loaded = false, busy = false;
+  bool loaded = false, busy = false, sendingDoc = false;
   late bool receive;
   late Set<String> brands, cats;
   late String name, city, bio, x, snap, tiktok, insta, location, cr, vat;
@@ -296,6 +304,57 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   Widget _section(String t) => Text(t, style: tx(16, w: w6, c: AppColors.pri));
   String? _nz(String s) => s.trim().isEmpty ? null : s.trim();
+
+  Future<void> _sendDoc() async {
+    if (cr.trim().isEmpty) {
+      showToast(context, 'اكتب رقم السجل التجاري أول');
+      return;
+    }
+    final u = await pickAndUpload(context);
+    if (u == null || !mounted) return;
+    setState(() => sendingDoc = true);
+    final ok = await run(context, () async {
+      await Api.updateProfile({'store_cr': cr.trim(), 'store_vat': _nz(vat)});
+      await Api.requestVerification(u);
+    }, success: 'وصل طلب التوثيق للإدارة — بنبلّغك بالنتيجة');
+    if (!mounted) return;
+    setState(() => sendingDoc = false);
+    if (ok) ref.invalidate(myProfileProvider);
+  }
+
+  Widget _verifyCard(Profile p) {
+    final (label, color, bg) = p.verified
+        ? ('متجرك موثّق ✓', AppColors.teal, AppColors.tealBg)
+        : switch (p.verifyStatus) {
+            'pending' => ('طلبك قيد المراجعة', AppColors.pri, AppColors.pink),
+            'rejected' => ('الطلب مرفوض${p.verifyNote != null ? ' — ${p.verifyNote}' : ''}', AppColors.red, const Color(0xFFFBE5E2)),
+            _ => ('غير موثّق', AppColors.ink2, AppColors.bg),
+          };
+    return AppCard(
+      child: VCol(gap: 12, [
+        Row(children: [
+          const IconSquare(LucideIcons.badgeCheck, size: 44),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('توثيق المتجر', style: tx(16, w: w6)),
+              Text('ارفع صورة السجل التجاري وتظهر لك شارة «تاجر موثّق» بعد مراجعة الإدارة', style: tx(12, c: AppColors.mute)),
+            ]),
+          ),
+        ]),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+          child: Text(label, style: tx(13, w: w5, c: color)),
+        ),
+        if (p.crDocUrl != null) PartThumb(width: double.infinity, height: 140, radius: 14, imageUrl: p.crDocUrl),
+        if (!p.verified)
+          sendingDoc
+              ? const SizedBox(height: 48, child: Center(child: CircularProgressIndicator(color: AppColors.pri)))
+              : AppButton(p.crDocUrl == null ? 'ارفع صورة السجل التجاري' : 'أعد رفع السجل التجاري', icon: LucideIcons.camera, v: BtnV.out2, height: 48, fs: 15, onTap: _sendDoc),
+      ]),
+    );
+  }
 
   Future<void> _save(Profile p) async {
     if (name.trim().isEmpty) {
@@ -397,6 +456,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           _section('بيانات المحل (للتاجر)'),
           LabeledField('السجل التجاري', AppField(hint: 'رقم السجل التجاري', value: cr.isEmpty ? null : cr, ltrText: true, keyboard: TextInputType.number, onChanged: (v) => cr = v)),
           LabeledField('الرقم الضريبي (إن وجد)', AppField(hint: 'الرقم الضريبي', value: vat.isEmpty ? null : vat, ltrText: true, keyboard: TextInputType.number, onChanged: (v) => vat = v)),
+          _verifyCard(p),
           LabeledField('الآيبان (لتحويل المبيعات)', AppField(hint: 'SAxx xxxx xxxx xxxx xxxx xxxx', ltrText: true, onChanged: (v) => iban = v),
               help: 'اتركه فارغاً للإبقاء على الآيبان المحفوظ، أو اكتب الجديد (24 خانة تبدأ بـ SA)'),
           ToggleRow(title: 'أستقبل طلبات القطع من العملاء', sub: 'أوقفه لو ما تبي تصلك طلبات القطع الموجّهة لتخصصك', value: receive, onChanged: (v) => setState(() => receive = v)),

@@ -64,8 +64,8 @@ String errMsg(Object e) {
 
 class Profile {
   final String id;
-  final String? phone, name, city, bio, avatarUrl, storeCr, storeVat, storeLocation;
-  final String role, plan;
+  final String? phone, name, city, bio, avatarUrl, storeCr, storeVat, storeLocation, crDocUrl, verifyNote;
+  final String role, plan, verifyStatus;
   final List<String> brands, categories;
   final bool receiveRequests, verified;
   final Map<String, dynamic> socials;
@@ -79,8 +79,11 @@ class Profile {
         storeCr = j['store_cr'],
         storeVat = j['store_vat'],
         storeLocation = j['store_location'],
+        crDocUrl = j['cr_doc_url'],
+        verifyNote = j['verify_note'],
         role = j['role'] ?? 'buyer',
         plan = j['plan'] ?? 'free',
+        verifyStatus = j['verify_status'] ?? 'none',
         brands = _sl(j['brands']),
         categories = _sl(j['categories']),
         receiveRequests = j['receive_requests'] ?? true,
@@ -102,6 +105,7 @@ class Listing {
   final Profile? seller;
   final num? topBid;
   final int bidsCount;
+  final bool featured;
   Listing.fromJson(Map<String, dynamic> j)
       : id = j['id'],
         sellerId = j['seller_id'],
@@ -122,6 +126,7 @@ class Listing {
         createdAt = _d(j['created_at']),
         quantity = j['quantity'] ?? 1,
         views = j['views'] ?? 0,
+        featured = j['featured'] ?? false,
         delivery = _sl(j['delivery']),
         images = _sl(j['images']),
         seller = j['seller'] is Map ? Profile.fromJson(Map<String, dynamic>.from(j['seller'])) : null,
@@ -377,7 +382,7 @@ class Api {
     return r == null ? null : Profile.fromJson(r);
   }
 
-  // الإعلانات
+  // الإعلانات (المميزة من لوحة الإدارة تظهر أول)
   static Future<List<Listing>> listings({String? q, String? brand, String? sellerId, String? status = 'active', int limit = 50, bool auctionOnly = false}) async {
     var f = sb.from('listings').select(_listingSel);
     if (status != null) f = f.eq('status', status);
@@ -390,7 +395,7 @@ class Api {
         f = f.or('title.ilike.%$w%,brand.ilike.%$w%,model.ilike.%$w%');
       }
     }
-    final r = await f.order('created_at', ascending: false).limit(limit);
+    final r = await f.order('featured', ascending: false).order('created_at', ascending: false).limit(limit);
     return r.map<Listing>((e) => Listing.fromJson(e)).toList();
   }
 
@@ -582,6 +587,9 @@ class Api {
 
   // الحساب
   static Future<void> updateProfile(Map<String, dynamic> data) => sb.from('profiles').update(data).eq('id', myId!);
+
+  /// طلب توثيق المتجر: رفع صورة السجل التجاري وإرسالها لمراجعة الإدارة
+  static Future<void> requestVerification(String docUrl) => updateProfile({'cr_doc_url': docUrl, 'verify_status': 'pending'});
 
   static Future<String?> iban() async {
     final r = await sb.from('payout_accounts').select('iban').eq('user_id', myId!).maybeSingle();

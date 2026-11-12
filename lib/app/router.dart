@@ -23,6 +23,7 @@ final appRouter = GoRouter(
   routes: [
     _r('/', (s) => const SplashScreen()),
     _r('/signup', (s) => const SignupScreen()),
+    _r('/login', (s) => const SignupScreen(login: true)),
     _r('/otp', (s) => const OtpScreen()),
 
     // التبويبات السفلية
@@ -37,15 +38,15 @@ final appRouter = GoRouter(
     ),
 
     // المشتري
-    _r('/search', (s) => SearchScreen(query: s.uri.queryParameters['q'] ?? 'صدام كامري')),
+    _r('/search', (s) => SearchScreen(query: s.uri.queryParameters['q'] ?? '', brand: s.uri.queryParameters['brand'])),
     _r('/part/:id', (s) => PartDetailsScreen(id: s.pathParameters['id']!)),
     _r('/favorites', (s) => const FavoritesScreen()),
     _r('/cart', (s) => const CartScreen()),
     _r('/checkout', (s) => const PaymentScreen()),
-    _r('/invoice', (s) => const InvoiceScreen()),
+    _r('/invoice/:id', (s) => InvoiceScreen(id: s.pathParameters['id']!)),
     _r('/invoices', (s) => const InvoicesScreen()),
     _r('/request-part', (s) => const RequestPartScreen()),
-    _r('/request-sent', (s) => const RequestSentScreen()),
+    _r('/request-sent/:id', (s) => RequestSentScreen(id: s.pathParameters['id']!)),
     _r('/offers/:id', (s) => OffersScreen(id: s.pathParameters['id']!)),
     _r('/order/:id', (s) => OrderDetailsScreen(id: s.pathParameters['id']!)),
     _r('/notifications', (s) => const NotificationsScreen()),
@@ -56,7 +57,7 @@ final appRouter = GoRouter(
     _r('/edit-profile', (s) => const EditProfileScreen()),
 
     // التاجر / المورد
-    _r('/sell', (s) => const SellPartScreen()),
+    _r('/sell', (s) => SellPartScreen(editId: s.uri.queryParameters['edit'])),
     _r('/m/dashboard', (s) => const DashboardScreen()),
     _r('/m/requests', (s) => const CustomerRequestsScreen()),
     _r('/m/offer/:id', (s) => SubmitOfferScreen(id: s.pathParameters['id']!)),

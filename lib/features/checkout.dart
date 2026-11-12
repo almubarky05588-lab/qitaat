@@ -4,80 +4,126 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../app/state.dart';
+import '../core/media.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
-import '../data/mock.dart';
+import '../data/api.dart';
 
-String money(double v) => '${v.toStringAsFixed(2)} ر.س';
+String money(num v) => fmtMoney2(v);
 
 // ───────────────── 08 · السلة ─────────────────
 
-class CartScreen extends ConsumerWidget {
+class CartScreen extends ConsumerStatefulWidget {
   const CartScreen({super.key});
+  @override
+  ConsumerState<CartScreen> createState() => _CartScreenState();
+}
+
+class _CartScreenState extends ConsumerState<CartScreen> {
+  bool busy = false;
+
+  Widget _stepBtn(IconData ic, bool filled, VoidCallback onTap) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(color: filled ? AppColors.pri : AppColors.white, shape: BoxShape.circle),
+          child: Icon(ic, size: 14, color: filled ? AppColors.white : AppColors.ink2),
+        ),
+      );
+
+  Future<void> _setQty(String id, int q) async {
+    await run(context, () => Api.setCartQty(id, q));
+    ref.invalidate(cartProvider);
+  }
+
+  Future<void> _checkout() async {
+    setState(() => busy = true);
+    try {
+      final ids = await Api.checkoutCart(null);
+      ref.invalidate(cartProvider);
+      if (ids.isEmpty) {
+        if (mounted) showToast(context, 'القطع في السلة ما عادت متوفرة');
+        return;
+      }
+      ref.read(checkoutOrdersProvider.notifier).state = ids;
+      if (mounted) context.push('/checkout');
+    } catch (e) {
+      if (mounted) showToast(context, errMsg(e));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final items = ref.watch(cartProvider);
-    final cart = ref.read(cartProvider.notifier);
-    final sub = items.fold<double>(0, (a, e) => a + (e.product.price ?? 0) * e.qty);
-    final count = items.fold<int>(0, (a, e) => a + e.qty);
-    final vat = (sub + shippingFee) * vatRate;
-    final total = sub + shippingFee + vat;
-
-    Widget stepBtn(IconData ic, bool filled, VoidCallback onTap) => GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(color: filled ? AppColors.pri : AppColors.white, shape: BoxShape.circle),
-            child: Icon(ic, size: 14, color: filled ? AppColors.white : AppColors.ink2),
-          ),
-        );
+  Widget build(BuildContext context) {
+    final cv = ref.watch(cartProvider);
+    final items = cv.valueOrNull ?? const <(Listing, int)>[];
+    final sub = items.fold<num>(0, (a, e) => a + (e.$1.price ?? 0) * e.$2);
+    final count = items.fold<int>(0, (a, e) => a + e.$2);
+    final sellers = items.map((e) => e.$1.sellerId).toSet().length;
+    final ship = shippingFee * sellers;
+    final vat = (sub + ship) * vatRate;
+    final total = sub + ship + vat;
 
     return AppPage(
       header: AppHeader(title: 'السلة', actions: [
-        GestureDetector(onTap: cart.clear, child: Text('حذف الكل', style: tx(13, w: w5, c: AppColors.red))),
+        if (items.isNotEmpty)
+          GestureDetector(
+            onTap: () async {
+              await run(context, Api.clearCart);
+              ref.invalidate(cartProvider);
+            },
+            child: Text('حذف الكل', style: tx(13, w: w5, c: AppColors.red)),
+          ),
       ]),
       gap: 14,
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       bottom: items.isEmpty
           ? null
-          : BottomBar(child: AppButton('إتمام الشراء — ${money(total)}', icon: LucideIcons.arrowLeft, onTap: () => context.push('/checkout'))),
+          : BottomBar(
+              child: busy
+                  ? const SizedBox(height: 54, child: Center(child: CircularProgressIndicator(color: AppColors.pri)))
+                  : AppButton('إتمام الشراء — ${money(total)}', icon: LucideIcons.arrowLeft, onTap: _checkout),
+            ),
       children: [
-        if (items.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 80),
-            child: Column(children: [
-              const Icon(LucideIcons.shoppingCart, size: 56, color: AppColors.thumbIcon),
-              const SizedBox(height: 12),
-              Text('سلتك فاضية', style: tx(18, w: w6)),
-            ]),
-          ),
+        if (cv.isLoading && items.isEmpty) const Loading(),
+        if (cv.hasError) ErrorBox(cv.error!, onRetry: () => ref.invalidate(cartProvider)),
+        if (!cv.isLoading && items.isEmpty && !cv.hasError)
+          EmptyBox(LucideIcons.shoppingCart, 'سلتك فاضية',
+              action: AppButton('تصفّح القطع', expand: false, radius: 999, height: 46, fs: 15, onTap: () => context.push('/search'))),
         for (final e in items)
           AppCard(
+            onTap: () => context.push('/part/${e.$1.id}'),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const PartThumb(width: 80, height: 80, radius: 14),
+              PartThumb(width: 80, height: 80, radius: 14, imageUrl: e.$1.cover),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('${e.product.title} · ${e.product.condition}', style: tx(15, w: w5)),
-                  Text('البائع: ${e.product.seller}', style: tx(12, c: AppColors.mute)),
-                  Text(sar(e.product.price ?? 0), style: tx(16, w: w6, c: AppColors.teal)),
+                  Text('${e.$1.title} · ${e.$1.condition}', style: tx(15, w: w5)),
+                  Text('البائع: ${e.$1.sellerName}', style: tx(12, c: AppColors.mute)),
+                  Text(fmtMoney(e.$1.price ?? 0), style: tx(16, w: w6, c: AppColors.teal)),
                 ]),
               ),
               const SizedBox(width: 12),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                GestureDetector(onTap: () => cart.remove(e.product.id), child: const Icon(LucideIcons.trash2, size: 20, color: AppColors.mute)),
+                GestureDetector(onTap: () => _setQty(e.$1.id, 0), child: const Icon(LucideIcons.trash2, size: 20, color: AppColors.mute)),
                 const SizedBox(height: 18),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                   decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(999)),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    stepBtn(LucideIcons.plus, true, () => cart.setQty(e.product.id, e.qty + 1)),
+                    _stepBtn(LucideIcons.plus, true, () {
+                      if (e.$2 < e.$1.quantity) {
+                        _setQty(e.$1.id, e.$2 + 1);
+                      } else {
+                        showToast(context, 'الكمية المتوفرة ${e.$1.quantity} فقط');
+                      }
+                    }),
                     const SizedBox(width: 12),
-                    Text('${e.qty}', style: tx(15, w: w6)),
+                    Text('${e.$2}', style: tx(15, w: w6)),
                     const SizedBox(width: 12),
-                    stepBtn(LucideIcons.minus, false, () => cart.setQty(e.product.id, e.qty - 1)),
+                    _stepBtn(LucideIcons.minus, false, () => _setQty(e.$1.id, e.$2 - 1)),
                   ]),
                 ),
               ]),
@@ -87,13 +133,13 @@ class CartScreen extends ConsumerWidget {
           Row(children: [
             const Expanded(child: AppField(hint: 'عندك كود خصم؟', icon: LucideIcons.ticket)),
             const SizedBox(width: 10),
-            AppButton('تطبيق', v: BtnV.soft, expand: false, height: 56),
+            AppButton('تطبيق', v: BtnV.soft, expand: false, height: 56, onTap: () => showToast(context, 'كود الخصم غير صالح')),
           ]),
           AppCard(
             child: VCol(gap: 10, [
               Text('ملخص الطلب', style: tx(16, w: w6)),
               KV('المجموع ($count قطع)', money(sub)),
-              KV('الشحن', money(shippingFee)),
+              KV('الشحن', money(ship)),
               KV('ضريبة القيمة المضافة (15%)', money(vat)),
               const HLine(),
               KV('الإجمالي', money(total), bold: true),
@@ -107,15 +153,18 @@ class CartScreen extends ConsumerWidget {
 
 // ───────────────── 09 · بوابة الدفع ─────────────────
 
-class PaymentScreen extends StatefulWidget {
+class PaymentScreen extends ConsumerStatefulWidget {
   const PaymentScreen({super.key});
   @override
-  State<PaymentScreen> createState() => _PaymentScreenState();
+  ConsumerState<PaymentScreen> createState() => _PaymentScreenState();
 }
 
-class _PaymentScreenState extends State<PaymentScreen> {
+class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   String method = 'mada';
   bool save = true;
+  bool busy = false;
+  String? address;
+  late Future<List<Order>> future = Api.ordersByIds(ref.read(checkoutOrdersProvider));
 
   Widget _logo(String t, Color bg, Color c) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -155,112 +204,173 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
+  void _editAddress() {
+    String v = address ?? '';
+    showAppSheet(
+      context,
+      VCol(gap: 14, [
+        Text('عنوان الشحن', style: tx(18, w: w6)),
+        AppField(hint: 'المدينة — الحي، الشارع، رقم المبنى', value: address, area: true, onChanged: (t) => v = t),
+        AppButton('حفظ العنوان', onTap: () {
+          setState(() => address = v.trim().isEmpty ? null : v.trim());
+          Navigator.pop(context);
+        }),
+      ]),
+    );
+  }
+
+  Future<void> _pay(List<Order> orders) async {
+    if (address == null && orders.any((o) => o.shippingAddress == null)) {
+      showToast(context, 'أضف عنوان الشحن أول');
+      _editAddress();
+      return;
+    }
+    setState(() => busy = true);
+    final ids = orders.map((o) => o.id).toList();
+    final label = {'mada': 'مدى', 'apple': 'Apple Pay', 'card': 'بطاقة ائتمانية', 'tabby': 'تابي'}[method]!;
+    final ok = await run(context, () async {
+      if (address != null) await Api.setOrderAddress(ids, address!);
+      await Api.payOrders(ids, label);
+    });
+    if (!mounted) return;
+    setState(() => busy = false);
+    if (ok) {
+      ref.read(checkoutOrdersProvider.notifier).state = const [];
+      context.pushReplacement('/invoice/${ids.first}');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AppPage(
-      header: const AppHeader(title: 'الدفع'),
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(color: AppColors.pink, borderRadius: BorderRadius.circular(16)),
-          child: Row(children: [
-            const Icon(LucideIcons.clock, size: 20, color: AppColors.pri),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text.rich(TextSpan(style: tx(13, c: AppColors.ink2), children: [
-                const TextSpan(text: 'أكمل الدفع خلال '),
-                TextSpan(text: '23:41', style: tx(13, w: w6, c: AppColors.pri)),
-                const TextSpan(text: ' قبل انتهاء مهلة العرض'),
-              ])),
-            ),
-          ]),
-        ),
-        AppCard(
-          child: Row(children: [
-            const PartThumb(width: 76, height: 76, radius: 14),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('صدام أمامي كامري 2020', style: tx(16, w: w5)),
-                Text('جديد أصلي · المورد: كار ون', style: tx(13, c: AppColors.mute)),
-                Text(sar(450), style: tx(17, w: w6, c: AppColors.teal)),
-              ]),
-            ),
-          ]),
-        ),
-        AppCard(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const IconSquare(LucideIcons.mapPin, size: 40, iconSize: 20, radius: 12),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('عنوان الشحن', style: tx(15, w: w5)),
-                Text('الرياض — حي النرجس، شارع الأمير محمد بن سلمان', style: tx(13, c: AppColors.mute)),
-              ]),
-            ),
-            Text('تغيير', style: tx(14, w: w5, c: AppColors.pri)),
-          ]),
-        ),
-        Text('طريقة الدفع', style: tx(17, w: w6)),
-        _method('mada', 'بطاقة مدى', null, [_logo('mada', const Color(0xFFEAF3FB), const Color(0xFF1E5AA8))],
-            expanded: VCol(gap: 14, [
-              const HLine(),
-              const LabeledField('رقم البطاقة', AppField(hint: '0000 0000 0000 0000', icon: LucideIcons.creditCard, ltrText: true, keyboard: TextInputType.number)),
-              Row(children: [
-                const Expanded(child: LabeledField('تاريخ الانتهاء', AppField(hint: 'MM / YY', ltrText: true))),
-                const SizedBox(width: 10),
-                const Expanded(child: LabeledField('CVV', AppField(hint: '•••', icon: LucideIcons.lock, ltrText: true))),
-              ]),
-              const LabeledField('اسم حامل البطاقة', AppField(hint: 'كما هو مكتوب على البطاقة')),
-              GestureDetector(
-                onTap: () => setState(() => save = !save),
+    return FutureBuilder<List<Order>>(
+      future: future,
+      builder: (c, s) {
+        final orders = (s.data ?? const <Order>[]).where((o) => o.status == 'awaiting_payment').toList();
+        final sub = orders.fold<num>(0, (a, o) => a + o.subtotal);
+        final ship = orders.fold<num>(0, (a, o) => a + o.shipping);
+        final vat = orders.fold<num>(0, (a, o) => a + o.vat);
+        final total = orders.fold<num>(0, (a, o) => a + o.total);
+        final deadline = orders.isEmpty ? null : orders.map((o) => o.payDeadline ?? DateTime.now()).reduce((a, b) => a.isBefore(b) ? a : b);
+        final addr = address ?? (orders.isNotEmpty ? orders.first.shippingAddress : null);
+
+        return AppPage(
+          header: const AppHeader(title: 'الدفع'),
+          children: [
+            if (!s.hasData) const Loading(),
+            if (s.hasData && orders.isEmpty) const EmptyBox(LucideIcons.checkCircle, 'ما فيه طلبات بانتظار الدفع'),
+            if (orders.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(color: AppColors.pink, borderRadius: BorderRadius.circular(16)),
                 child: Row(children: [
-                  Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(color: save ? AppColors.pri : AppColors.white, borderRadius: BorderRadius.circular(6), border: save ? null : Border.all(color: AppColors.chipB)),
-                    child: save ? const Icon(LucideIcons.check, size: 12, color: AppColors.white) : null,
+                  const Icon(LucideIcons.clock, size: 20, color: AppColors.pri),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text.rich(TextSpan(style: tx(13, c: AppColors.ink2), children: [
+                      const TextSpan(text: 'أكمل الدفع خلال '),
+                      TextSpan(text: fmtLeft(deadline).replaceFirst('باقي ', ''), style: tx(13, w: w6, c: AppColors.pri)),
+                      const TextSpan(text: ' قبل انتهاء مهلة العرض'),
+                    ])),
                   ),
-                  const SizedBox(width: 8),
-                  Text('احفظ البطاقة للمرات الجاية', style: tx(13, c: AppColors.ink2)),
                 ]),
               ),
-            ])),
-        _method('apple', 'Apple Pay', 'ادفع بلمسة', [_logo(' Pay', const Color(0xFF111111), AppColors.white)]),
-        _method('card', 'بطاقة ائتمانية', 'Visa · Mastercard', [_logo('VISA', const Color(0xFFEEF1FA), const Color(0xFF1A1F71)), _logo('MC', const Color(0xFFFDF0E6), const Color(0xFFEB001B))]),
-        _method('tabby', 'تابي', 'قسّمها على 4 دفعات بدون فوائد', [_logo('tabby', const Color(0xFF3BFFC1), const Color(0xFF111111))]),
-        AppCard(
-          child: VCol(gap: 10, [
-            Text('ملخص المبلغ', style: tx(16, w: w6)),
-            KV('سعر القطعة', money(450)),
-            KV('الشحن', money(35)),
-            KV('ضريبة القيمة المضافة (15%)', money(72.75)),
-            const HLine(),
-            KV('الإجمالي', money(557.75), bold: true),
-          ]),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(color: AppColors.tealBg, borderRadius: BorderRadius.circular(16)),
-          child: Row(children: [
-            const Icon(LucideIcons.shieldCheck, size: 22, color: AppColors.teal),
-            const SizedBox(width: 10),
-            Expanded(child: Text('دفع آمن ومشفّر — المبلغ محفوظ عند المنصة لين تستلم قطعتك', style: tx(13, c: AppColors.teal))),
-          ]),
-        ),
-        AppButton('ادفع ${money(557.75)}', icon: LucideIcons.lock, height: 56, onTap: () => context.pushReplacement('/invoice')),
-      ],
+              for (final o in orders)
+                AppCard(
+                  child: Row(children: [
+                    PartThumb(width: 76, height: 76, radius: 14, imageUrl: o.image),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(o.title, style: tx(16, w: w5)),
+                        Text('${o.condition ?? ''} · المورد: ${o.seller?.displayName ?? ''}', style: tx(13, c: AppColors.mute)),
+                        Text(fmtMoney(o.subtotal), style: tx(17, w: w6, c: AppColors.teal)),
+                      ]),
+                    ),
+                  ]),
+                ),
+              AppCard(
+                onTap: _editAddress,
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const IconSquare(LucideIcons.mapPin, size: 40, iconSize: 20, radius: 12),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('عنوان الشحن', style: tx(15, w: w5)),
+                      Text(addr ?? 'اضغط لإضافة عنوان الشحن', style: tx(13, c: addr == null ? AppColors.pri : AppColors.mute)),
+                    ]),
+                  ),
+                  Text(addr == null ? 'إضافة' : 'تغيير', style: tx(14, w: w5, c: AppColors.pri)),
+                ]),
+              ),
+              Text('طريقة الدفع', style: tx(17, w: w6)),
+              _method('mada', 'بطاقة مدى', null, [_logo('mada', const Color(0xFFEAF3FB), const Color(0xFF1E5AA8))],
+                  expanded: VCol(gap: 14, [
+                    const HLine(),
+                    const LabeledField('رقم البطاقة', AppField(hint: '0000 0000 0000 0000', icon: LucideIcons.creditCard, ltrText: true, keyboard: TextInputType.number)),
+                    Row(children: [
+                      const Expanded(child: LabeledField('تاريخ الانتهاء', AppField(hint: 'MM / YY', ltrText: true))),
+                      const SizedBox(width: 10),
+                      const Expanded(child: LabeledField('CVV', AppField(hint: '•••', icon: LucideIcons.lock, ltrText: true))),
+                    ]),
+                    const LabeledField('اسم حامل البطاقة', AppField(hint: 'كما هو مكتوب على البطاقة')),
+                    GestureDetector(
+                      onTap: () => setState(() => save = !save),
+                      child: Row(children: [
+                        Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(color: save ? AppColors.pri : AppColors.white, borderRadius: BorderRadius.circular(6), border: save ? null : Border.all(color: AppColors.chipB)),
+                          child: save ? const Icon(LucideIcons.check, size: 12, color: AppColors.white) : null,
+                        ),
+                        const SizedBox(width: 8),
+                        Text('احفظ البطاقة للمرات الجاية', style: tx(13, c: AppColors.ink2)),
+                      ]),
+                    ),
+                  ])),
+              _method('apple', 'Apple Pay', 'ادفع بلمسة', [_logo(' Pay', const Color(0xFF111111), AppColors.white)]),
+              _method('card', 'بطاقة ائتمانية', 'Visa · Mastercard', [_logo('VISA', const Color(0xFFEEF1FA), const Color(0xFF1A1F71)), _logo('MC', const Color(0xFFFDF0E6), const Color(0xFFEB001B))]),
+              _method('tabby', 'تابي', 'قسّمها على 4 دفعات بدون فوائد', [_logo('tabby', const Color(0xFF3BFFC1), const Color(0xFF111111))]),
+              AppCard(
+                child: VCol(gap: 10, [
+                  Text('ملخص المبلغ', style: tx(16, w: w6)),
+                  KV(orders.length > 1 ? 'سعر القطع' : 'سعر القطعة', money(sub)),
+                  KV('الشحن', money(ship)),
+                  KV('ضريبة القيمة المضافة (15%)', money(vat)),
+                  const HLine(),
+                  KV('الإجمالي', money(total), bold: true),
+                ]),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(color: AppColors.tealBg, borderRadius: BorderRadius.circular(16)),
+                child: Row(children: [
+                  const Icon(LucideIcons.shieldCheck, size: 22, color: AppColors.teal),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('دفع آمن ومشفّر — المبلغ محفوظ عند المنصة لين تستلم قطعتك', style: tx(13, c: AppColors.teal))),
+                ]),
+              ),
+              busy
+                  ? const SizedBox(height: 56, child: Center(child: CircularProgressIndicator(color: AppColors.pri)))
+                  : AppButton('ادفع ${money(total)}', icon: LucideIcons.lock, height: 56, onTap: () => _pay(orders)),
+            ],
+          ],
+        );
+      },
     );
   }
 }
 
 // ───────────────── 10 · الفاتورة ─────────────────
 
-class InvoiceScreen extends StatelessWidget {
-  const InvoiceScreen({super.key});
+final orderProvider = FutureProvider.family<Order?, String>((ref, id) => Api.order(id));
+
+class InvoiceScreen extends ConsumerWidget {
+  final String id;
+  const InvoiceScreen({super.key, required this.id});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ov = ref.watch(orderProvider(id));
     Widget kv(String k, String v) => Row(children: [
           Expanded(child: Text(k, style: tx(13, c: AppColors.mute))),
           Text(v, style: tx(13, w: w5)),
@@ -276,117 +386,127 @@ class InvoiceScreen extends StatelessWidget {
 
     return AppPage(
       header: AppHeader(title: 'الفاتورة', actions: [
-        HeaderIcon(LucideIcons.share2, onTap: () => showToast(context, 'مشاركة الفاتورة')),
-        HeaderIcon(LucideIcons.download, onTap: () => showToast(context, 'جاري التحميل')),
+        HeaderIcon(LucideIcons.share2, onTap: () => showToast(context, 'مشاركة الفاتورة تتفعّل مع نشر التطبيق')),
+        HeaderIcon(LucideIcons.download, onTap: () => showToast(context, 'تحميل PDF يتفعّل مع نشر التطبيق')),
       ]),
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(color: AppColors.sage, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.sageB)),
-          child: Row(children: [
-            const Icon(LucideIcons.checkCircle, size: 28, color: AppColors.teal),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('تم الدفع بنجاح', style: tx(16, w: w6, c: AppColors.teal)),
-                Text('وصلت فاتورتك على الجوال، وبيبدأ المورد يجهّز الشحنة', style: tx(12, c: AppColors.ink2)),
-              ]),
-            ),
-          ]),
-        ),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: Container(
-            color: AppColors.white,
-            padding: const EdgeInsets.fromLTRB(18, 20, 18, 22),
-            child: VCol(gap: 14, [
-              Row(children: [
-                const AppLogo(size: 44),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('قطعة سيارتك', style: tx(17, w: w7, c: AppColors.pri)),
-                    Text('فاتورة ضريبية مبسّطة', style: tx(12, c: AppColors.mute)),
-                  ]),
-                ),
-                const StatusBadge.teal('مدفوعة', icon: LucideIcons.check),
-              ]),
-              const SaduPattern(color: AppColors.bg, height: 8, tooth: 12),
-              kv('رقم الفاتورة', ltr('INV-2026-001284')),
-              kv('التاريخ', '2026/11/08 — 6:20 م'),
-              kv('رقم الطلب', ltr('ORD-58213')),
-              const HLine(),
-              Text('البائع', style: tx(14, w: w6)),
-              kv('الاسم', 'كار ون'),
-              kv('الرقم الضريبي', ltr('310XXXXXXXX0003')),
-              kv('السجل التجاري', ltr('7001XXXXXX')),
-              kv('المدينة', 'حفر الباطن'),
-              const HLine(),
-              Text('المشتري', style: tx(14, w: w6)),
-              kv('الاسم', 'عبدالله'),
-              kv('الجوال', ltr('+966 55 123 4567')),
+        AsyncBody<Order?>(ov, (o) {
+          if (o == null) return const EmptyBox(LucideIcons.receipt, 'الفاتورة غير موجودة');
+          final paid = o.paidAt != null;
+          final pt = o.paidAt ?? o.createdAt ?? DateTime.now();
+          return VCol(gap: 16, [
+            if (paid)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(16)),
-                child: Column(children: [
-                  row('الصنف', 'الكمية', 'المبلغ', head: true),
-                  const HLine(color: Color(0xFFE6D9C8)),
-                  row('صدام أمامي كامري 2020 · جديد أصلي', '1', '450.00'),
-                  const HLine(color: Color(0xFFE6D9C8)),
-                  row('رسوم الشحن', '1', '35.00'),
-                ]),
-              ),
-              kv('المجموع قبل الضريبة', money(485)),
-              kv('ضريبة القيمة المضافة 15%', money(72.75)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(color: AppColors.pink, borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(color: AppColors.sage, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.sageB)),
                 child: Row(children: [
-                  Expanded(child: Text('الإجمالي', style: tx(16, w: w6))),
-                  Text(money(557.75), style: tx(20, w: w7, c: AppColors.pri)),
+                  const Icon(LucideIcons.checkCircle, size: 28, color: AppColors.teal),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('تم الدفع بنجاح', style: tx(16, w: w6, c: AppColors.teal)),
+                      Text('وصلت فاتورتك على الجوال، وبيبدأ المورد يجهّز الشحنة', style: tx(12, c: AppColors.ink2)),
+                    ]),
+                  ),
                 ]),
               ),
-              kv('طريقة الدفع', 'مدى •••• 9010'),
-              const HLine(),
-              Row(children: [
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('رمز الفاتورة الإلكترونية', style: tx(13, w: w6)),
-                    Text('متوافق مع متطلبات هيئة الزكاة والضريبة والجمارك', style: tx(12, c: AppColors.mute)),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Container(
+                color: AppColors.white,
+                padding: const EdgeInsets.fromLTRB(18, 20, 18, 22),
+                child: VCol(gap: 14, [
+                  Row(children: [
+                    const AppLogo(size: 44),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('قطعة سيارتك', style: tx(17, w: w7, c: AppColors.pri)),
+                        Text('فاتورة ضريبية مبسّطة', style: tx(12, c: AppColors.mute)),
+                      ]),
+                    ),
+                    paid ? const StatusBadge.teal('مدفوعة', icon: LucideIcons.check) : const StatusBadge('غير مدفوعة'),
                   ]),
-                ),
-                const SizedBox(width: 14),
-                const _QrBox(),
-              ]),
+                  const SaduPattern(color: AppColors.bg, height: 8, tooth: 12),
+                  kv('رقم الفاتورة', ltr(o.invoiceNo ?? '—')),
+                  kv('التاريخ', '${fmtDate(pt)} — ${fmtTime(pt)}'),
+                  kv('رقم الطلب', ltr(o.orderNo)),
+                  const HLine(),
+                  Text('البائع', style: tx(14, w: w6)),
+                  kv('الاسم', o.seller?.displayName ?? ''),
+                  if (o.seller?.storeVat != null) kv('الرقم الضريبي', ltr(o.seller!.storeVat!)),
+                  if (o.seller?.storeCr != null) kv('السجل التجاري', ltr(o.seller!.storeCr!)),
+                  if (o.seller?.city != null) kv('المدينة', o.seller!.city!),
+                  const HLine(),
+                  Text('المشتري', style: tx(14, w: w6)),
+                  kv('الاسم', o.buyer?.displayName ?? ''),
+                  if (o.buyer?.phone != null) kv('الجوال', ltr(o.buyer!.phone!)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(16)),
+                    child: Column(children: [
+                      row('الصنف', 'الكمية', 'المبلغ', head: true),
+                      const HLine(color: Color(0xFFE6D9C8)),
+                      row('${o.title}${o.condition == null ? '' : ' · ${o.condition}'}', '${o.quantity}', o.subtotal.toStringAsFixed(2)),
+                      const HLine(color: Color(0xFFE6D9C8)),
+                      row('رسوم الشحن', '1', o.shipping.toStringAsFixed(2)),
+                    ]),
+                  ),
+                  kv('المجموع قبل الضريبة', money(o.subtotal + o.shipping)),
+                  kv('ضريبة القيمة المضافة 15%', money(o.vat)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(color: AppColors.pink, borderRadius: BorderRadius.circular(14)),
+                    child: Row(children: [
+                      Expanded(child: Text('الإجمالي', style: tx(16, w: w6))),
+                      Text(money(o.total), style: tx(20, w: w7, c: AppColors.pri)),
+                    ]),
+                  ),
+                  if (o.paymentMethod != null) kv('طريقة الدفع', o.paymentMethod!),
+                  const HLine(),
+                  Row(children: [
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('رمز الفاتورة الإلكترونية', style: tx(13, w: w6)),
+                        Text('متوافق مع متطلبات هيئة الزكاة والضريبة والجمارك', style: tx(12, c: AppColors.mute)),
+                      ]),
+                    ),
+                    const SizedBox(width: 14),
+                    _QrBox(seed: o.orderNo.hashCode),
+                  ]),
+                ]),
+              ),
+            ),
+            Row(children: [
+              Expanded(child: AppButton('تحميل PDF', icon: LucideIcons.download, onTap: () => showToast(context, 'تحميل PDF يتفعّل مع نشر التطبيق'))),
+              const SizedBox(width: 12),
+              Expanded(child: AppButton('مشاركة', icon: LucideIcons.share2, v: BtnV.out, onTap: () => showToast(context, 'مشاركة الفاتورة تتفعّل مع نشر التطبيق'))),
             ]),
-          ),
-        ),
-        Row(children: [
-          Expanded(child: AppButton('تحميل PDF', icon: LucideIcons.download)),
-          const SizedBox(width: 12),
-          Expanded(child: AppButton('مشاركة', icon: LucideIcons.share2, v: BtnV.out)),
-        ]),
-        AppButton('تتبّع الشحنة', icon: LucideIcons.truck, v: BtnV.tealOut, onTap: () => context.push('/order/o1')),
+            AppButton('تتبّع الشحنة', icon: LucideIcons.truck, v: BtnV.tealOut, onTap: () => context.push('/order/${o.id}')),
+          ]);
+        }),
       ],
     );
   }
 }
 
-/// رمز QR شكلي (يُولّد فعلياً من بيانات الفاتورة عند الربط)
 class _QrBox extends StatelessWidget {
-  const _QrBox();
+  final int seed;
+  const _QrBox({required this.seed});
   @override
-  Widget build(BuildContext context) => SizedBox(width: 100, height: 100, child: CustomPaint(painter: _QrPainter()));
+  Widget build(BuildContext context) => SizedBox(width: 100, height: 100, child: CustomPaint(painter: _QrPainter(seed)));
 }
 
 class _QrPainter extends CustomPainter {
+  final int seed0;
+  _QrPainter(this.seed0);
   @override
   void paint(Canvas canvas, Size size) {
     const n = 25;
     final cs = size.width / n;
     final ink = Paint()..color = AppColors.ink;
     final white = Paint()..color = AppColors.white;
-    var seed = 7;
+    var seed = seed0.abs() % 233280 + 7;
     double rnd() {
       seed = (seed * 9301 + 49297) % 233280;
       return seed / 233280;
@@ -416,56 +536,70 @@ class _QrPainter extends CustomPainter {
 
 // ───────────────── 23 · فواتيري ─────────────────
 
-class InvoicesScreen extends StatefulWidget {
+final myOrdersProvider = FutureProvider<List<Order>>((ref) {
+  ref.watch(authProvider);
+  return Api.myOrders();
+});
+
+class InvoicesScreen extends ConsumerStatefulWidget {
   const InvoicesScreen({super.key});
   @override
-  State<InvoicesScreen> createState() => _InvoicesScreenState();
+  ConsumerState<InvoicesScreen> createState() => _InvoicesScreenState();
 }
 
-class _InvoicesScreenState extends State<InvoicesScreen> {
+class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
   int filter = 0;
   @override
   Widget build(BuildContext context) {
-    final list = Mock.invoices.where((i) => filter == 0 || (filter == 1 ? !i.refunded : i.refunded)).toList();
+    final ov = ref.watch(myOrdersProvider);
     return AppPage(
       header: const AppHeader(title: 'فواتيري'),
       gap: 14,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: Container(
-            decoration: const BoxDecoration(gradient: AppColors.gradient),
-            padding: const EdgeInsets.all(20),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('إجمالي مشترياتك في 2026', style: tx(13, c: AppColors.white.withOpacity(0.85))),
-              Text(ltr('1,240.50 ر.س'), style: tx(28, w: w7, c: AppColors.white, h: 1.3)),
-              Text('7 فواتير', style: tx(13, c: AppColors.white.withOpacity(0.85))),
-            ]),
-          ),
-        ),
-        Wrap(spacing: 8, children: [
-          for (var i = 0; i < 3; i++) AppChip(const ['الكل', 'مدفوعة', 'مستردة'][i], selected: filter == i, px: 14, py: 7, onTap: () => setState(() => filter = i)),
-        ]),
-        for (final inv in list)
-          AppCard(
-            padding: const EdgeInsets.all(14),
-            onTap: () => context.push('/invoice'),
-            child: Row(children: [
-              const IconSquare(LucideIcons.receipt),
-              const SizedBox(width: 12),
-              Expanded(
+        AsyncBody<List<Order>>(ov, (all) {
+          final paid = all.where((o) => o.invoiceNo != null).toList();
+          final year = DateTime.now().year;
+          final yearTotal = paid.where((o) => o.paidAt?.year == year && o.status != 'cancelled').fold<num>(0, (a, o) => a + o.total);
+          final list = paid.where((o) => filter == 0 || (filter == 1 ? o.status != 'cancelled' : o.status == 'cancelled')).toList();
+          return VCol(gap: 14, [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: Container(
+                decoration: const BoxDecoration(gradient: AppColors.gradient),
+                padding: const EdgeInsets.all(20),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(ltr(inv.no), style: tx(15, w: w6)),
-                  Text(inv.desc, style: tx(12, c: AppColors.mute)),
+                  Text('إجمالي مشترياتك في $year', style: tx(13, c: AppColors.white.withOpacity(0.85))),
+                  Text(ltr(money(yearTotal)), style: tx(28, w: w7, c: AppColors.white, h: 1.3)),
+                  Text('${paid.length} فواتير', style: tx(13, c: AppColors.white.withOpacity(0.85))),
                 ]),
               ),
-              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text('${inv.amount} ر.س', style: tx(15, w: w6)),
-                const SizedBox(height: 4),
-                inv.refunded ? const StatusBadge.grey('مستردة') : const StatusBadge.teal('مدفوعة'),
-              ]),
+            ),
+            Wrap(spacing: 8, children: [
+              for (var i = 0; i < 3; i++) AppChip(const ['الكل', 'مدفوعة', 'مستردة'][i], selected: filter == i, px: 14, py: 7, onTap: () => setState(() => filter = i)),
             ]),
-          ),
+            if (list.isEmpty) const EmptyBox(LucideIcons.receipt, 'ما عندك فواتير للحين'),
+            for (final o in list)
+              AppCard(
+                padding: const EdgeInsets.all(14),
+                onTap: () => context.push('/invoice/${o.id}'),
+                child: Row(children: [
+                  const IconSquare(LucideIcons.receipt),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(ltr(o.invoiceNo!), style: tx(15, w: w6)),
+                      Text('${o.title} · ${fmtDate(o.paidAt)}', style: tx(12, c: AppColors.mute)),
+                    ]),
+                  ),
+                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Text(money(o.total), style: tx(15, w: w6)),
+                    const SizedBox(height: 4),
+                    o.status == 'cancelled' ? const StatusBadge.grey('مستردة') : const StatusBadge.teal('مدفوعة'),
+                  ]),
+                ]),
+              ),
+          ]);
+        }),
       ],
     );
   }

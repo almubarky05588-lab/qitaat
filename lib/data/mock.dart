@@ -1,20 +1,24 @@
-// القوائم الثابتة في التطبيق (الماركات، الأصناف، الحالات، المدن)
+// القوائم في التطبيق (الماركات، الأصناف، الحالات، المدن، شركات الشحن)
+// تُحمَّل من جدول catalog في القاعدة عند فتح التطبيق، وتتحكم فيها لوحة الإدارة.
+// القيم هنا احتياطية لو تعذّر الاتصال.
+
+import 'api.dart';
 
 class Mock {
-  static const brands = ['تويوتا', 'لكزس', 'نيسان', 'إنفينيتي', 'هوندا', 'أكيورا', 'هيونداي'];
-  static const allBrands = [
+  static List<String> brands = ['تويوتا', 'لكزس', 'نيسان', 'إنفينيتي', 'هوندا', 'أكيورا', 'هيونداي'];
+  static List<String> allBrands = [
     'تويوتا', 'لكزس', 'نيسان', 'إنفينيتي', 'هوندا', 'أكيورا', 'ميتسوبيشي', 'مازدا', 'سوزوكي', 'سوبارو',
     'جي إم سي', 'شيفروليه', 'كاديلاك', 'فورد', 'لينكولن', 'دودج', 'رام', 'كرايسلر', 'جيب', 'تسلا',
     'مرسيدس', 'بي إم دبليو', 'ميني', 'أودي', 'فولكس واجن', 'بورش', 'هيونداي', 'كيا', 'جينيسيس', 'لاند روفر',
     'جاكوار', 'فولفو', 'بيجو', 'رينو', 'فيات', 'مازيراتي', 'فيراري', 'بنتلي', 'رولز رويس', 'شانجان', 'جيلي', 'هافال', 'إم جي', 'بي واي دي',
   ];
-  static const categories = ['بودي', 'إنارة', 'مكينة', 'قير', 'كهرباء', 'تبريد', 'عفشة', 'فرامل', 'إطارات'];
-  static const conditions = ['جديد أصلي', 'جديد درجة أولى', 'مستعمل', 'كليهما'];
-  static const sellConditions = ['جديد أصلي', 'جديد درجة أولى', 'مستعمل', 'مجدد'];
-  static const cities = ['الرياض', 'جدة', 'الدمام', 'مكة', 'المدينة', 'حفر الباطن', 'أبها', 'تبوك', 'القصيم', 'الطائف', 'الخبر', 'جازان'];
-  static const carriers = ['سمسا', 'أرامكس', 'ناقل', 'البريد السعودي', 'DHL', 'توصيل بنفسي'];
+  static List<String> categories = ['بودي', 'إنارة', 'مكينة', 'قير', 'كهرباء', 'تبريد', 'عفشة', 'فرامل', 'إطارات'];
+  static List<String> conditions = ['جديد أصلي', 'جديد درجة أولى', 'مستعمل', 'كليهما'];
+  static List<String> sellConditions = ['جديد أصلي', 'جديد درجة أولى', 'مستعمل', 'مجدد'];
+  static List<String> cities = ['الرياض', 'جدة', 'الدمام', 'مكة', 'المدينة', 'حفر الباطن', 'أبها', 'تبوك', 'القصيم', 'الطائف', 'الخبر', 'جازان'];
+  static List<String> carriers = ['سمسا', 'أرامكس', 'ناقل', 'البريد السعودي', 'DHL', 'توصيل بنفسي'];
 
-  static const models = {
+  static Map<String, List<String>> models = {
     'تويوتا': ['كامري', 'كورولا', 'يارس', 'لاندكروزر', 'هايلكس', 'أفالون', 'راف فور', 'فورتشنر', 'إف جي', 'برادو', 'سيكويا'],
     'لكزس': ['LX', 'ES', 'IS', 'GS', 'LS', 'RX', 'GX', 'NX'],
     'نيسان': ['باترول', 'صني', 'ألتيما', 'ماكسيما', 'إكستيرا', 'نافارا', 'باثفايندر', 'ماجنايت'],
@@ -26,5 +30,37 @@ class Mock {
     'فورد': ['إكسبلورر', 'إكسبيديشن', 'F-150', 'توروس', 'موستنج', 'إيدج'],
   };
 
-  static List<String> modelsOf(String brand) => models[brand] ?? const ['أخرى'];
+  static List<String> modelsOf(String brand) => (models[brand]?.isNotEmpty ?? false) ? models[brand]! : const ['أخرى'];
+
+  /// تحميل القوائم من القاعدة (لوحة الإدارة تتحكم فيها)
+  static Future<void> load() async {
+    try {
+      final rows = await sb.from('catalog').select('kind,value,parent,popular').eq('active', true).order('sort');
+      List<String> of(String k) => rows.where((r) => r['kind'] == k).map<String>((r) => '${r['value']}').toList();
+      final b = of('brand');
+      if (b.isNotEmpty) {
+        allBrands = b;
+        final pop = rows.where((r) => r['kind'] == 'brand' && r['popular'] == true).map<String>((r) => '${r['value']}').toList();
+        brands = pop.isNotEmpty ? pop : b.take(7).toList();
+      }
+      final c = of('category');
+      if (c.isNotEmpty) categories = c;
+      final cond = of('condition');
+      if (cond.isNotEmpty) {
+        sellConditions = cond;
+        conditions = [...cond.where((x) => x != 'مجدد'), 'كليهما'];
+      }
+      final ci = of('city');
+      if (ci.isNotEmpty) cities = ci;
+      final ca = of('carrier');
+      if (ca.isNotEmpty) carriers = ca;
+      final m = <String, List<String>>{};
+      for (final r in rows.where((r) => r['kind'] == 'model')) {
+        (m[r['parent'] ?? ''] ??= []).add('${r['value']}');
+      }
+      if (m.isNotEmpty) models = m;
+    } catch (_) {
+      // نكمل بالقيم الاحتياطية
+    }
+  }
 }

@@ -9,21 +9,32 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../app/state.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
+import '../data/api.dart';
 import '../data/mock.dart';
 
 // ───────────────── 01 · البداية ─────────────────
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Timer(const Duration(milliseconds: 1800), () {
+    Timer(const Duration(milliseconds: 1500), () async {
+      if (!mounted) return;
+      if (sb.auth.currentSession != null) {
+        final p = await Api.profile(myId!).catchError((_) => null);
+        if (!mounted) return;
+        if (p != null) {
+          context.go('/home');
+          return;
+        }
+        await Api.signOut();
+      }
       if (mounted) context.go('/signup');
     });
   }
@@ -52,10 +63,19 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-// ───────────────── 02 · تسجيل حساب ─────────────────
+// ───────────────── 02 · تسجيل حساب / دخول ─────────────────
+
+String? normalizePhone(String raw) {
+  var d = raw.replaceAll(RegExp(r'\D'), '');
+  if (d.startsWith('00966')) d = d.substring(5);
+  if (d.startsWith('966')) d = d.substring(3);
+  if (d.startsWith('0')) d = d.substring(1);
+  return RegExp(r'^5\d{8}$').hasMatch(d) ? d : null;
+}
 
 class SignupScreen extends ConsumerStatefulWidget {
-  const SignupScreen({super.key});
+  final bool login;
+  const SignupScreen({super.key, this.login = false});
   @override
   ConsumerState<SignupScreen> createState() => _SignupScreenState();
 }
@@ -65,6 +85,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   String city = '';
   bool agree = true;
   String phone = '';
+  String name = '';
 
   Widget _roleCard(UserRole r, IconData icon, String title, String sub) {
     final sel = role == r;
@@ -121,8 +142,35 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     );
   }
 
+  void _continue() {
+    final p = normalizePhone(phone);
+    if (p == null) {
+      showToast(context, 'اكتب رقم جوال صحيح يبدأ بـ 5 (9 أرقام)');
+      return;
+    }
+    if (!widget.login) {
+      if (name.trim().isEmpty) {
+        showToast(context, 'اكتب اسمك');
+        return;
+      }
+      if (city.isEmpty) {
+        showToast(context, 'اختر مدينتك');
+        return;
+      }
+    }
+    ref.read(signupDraftProvider.notifier).state = SignupDraft(
+      phone: p,
+      name: widget.login ? null : name.trim(),
+      city: widget.login ? null : city,
+      role: widget.login ? null : (role == UserRole.merchant ? 'merchant' : 'buyer'),
+      login: widget.login,
+    );
+    context.push('/otp');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final login = widget.login;
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
@@ -141,18 +189,19 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
             child: VCol(gap: 18, [
               VCol(gap: 4, [
-                Text('إنشاء حساب جديد', style: tx(26, w: w7)),
-                Text('سجّل برقم جوالك وابدأ تبيع وتشتري قطع الغيار بسهولة', style: tx(15, c: AppColors.mute)),
+                Text(login ? 'تسجيل الدخول' : 'إنشاء حساب جديد', style: tx(26, w: w7)),
+                Text(login ? 'ادخل برقم جوالك المسجّل' : 'سجّل برقم جوالك وابدأ تبيع وتشتري قطع الغيار بسهولة', style: tx(15, c: AppColors.mute)),
               ]),
-              LabeledField(
-                'نوع الحساب',
-                Row(children: [
-                  _roleCard(UserRole.buyer, LucideIcons.shoppingBag, 'مشتري', 'أدوّر على قطع لسيارتي'),
-                  const SizedBox(width: 12),
-                  _roleCard(UserRole.merchant, LucideIcons.store, 'تاجر / مورد', 'أبيع وأستقبل طلبات القطع'),
-                ]),
-              ),
-              const LabeledField('الاسم', AppField(hint: 'اكتب اسمك', icon: LucideIcons.user)),
+              if (!login)
+                LabeledField(
+                  'نوع الحساب',
+                  Row(children: [
+                    _roleCard(UserRole.buyer, LucideIcons.shoppingBag, 'مشتري', 'أدوّر على قطع لسيارتي'),
+                    const SizedBox(width: 12),
+                    _roleCard(UserRole.merchant, LucideIcons.store, 'تاجر / مورد', 'أبيع وأستقبل طلبات القطع'),
+                  ]),
+                ),
+              if (!login) LabeledField('الاسم', AppField(hint: role == UserRole.merchant ? 'اسم المحل' : 'اكتب اسمك', icon: LucideIcons.user, onChanged: (v) => name = v)),
               LabeledField(
                 'رقم الجوال',
                 AppField(
@@ -168,44 +217,45 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   ]),
                 ),
               ),
-              LabeledField(
-                'المدينة',
-                AppField(key: ValueKey(city), hint: 'اختر مدينتك', value: city.isEmpty ? null : city, icon: LucideIcons.mapPin, chevron: true, onTap: _pickCity),
-              ),
-              GestureDetector(
-                onTap: () => setState(() => agree = !agree),
-                child: Row(children: [
-                  Container(
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: agree ? AppColors.pri : AppColors.white,
-                      borderRadius: BorderRadius.circular(7),
-                      border: agree ? null : Border.all(color: AppColors.chipB),
+              if (!login)
+                LabeledField(
+                  'المدينة',
+                  AppField(key: ValueKey(city), hint: 'اختر مدينتك', value: city.isEmpty ? null : city, icon: LucideIcons.mapPin, chevron: true, onTap: _pickCity),
+                ),
+              if (!login)
+                GestureDetector(
+                  onTap: () => setState(() => agree = !agree),
+                  child: Row(children: [
+                    Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: agree ? AppColors.pri : AppColors.white,
+                        borderRadius: BorderRadius.circular(7),
+                        border: agree ? null : Border.all(color: AppColors.chipB),
+                      ),
+                      child: agree ? const Icon(LucideIcons.check, size: 14, color: AppColors.white) : null,
                     ),
-                    child: agree ? const Icon(LucideIcons.check, size: 14, color: AppColors.white) : null,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text.rich(TextSpan(style: tx(13, c: AppColors.ink2), children: [
-                      const TextSpan(text: 'أوافق على '),
-                      TextSpan(text: 'الشروط والأحكام', style: tx(13, c: AppColors.pri)),
-                      const TextSpan(text: ' و'),
-                      TextSpan(text: 'سياسة الخصوصية', style: tx(13, c: AppColors.pri)),
-                    ])),
-                  ),
-                ]),
-              ),
-              AppButton('أرسل رمز التحقق', icon: LucideIcons.arrowLeft, disabled: !agree, onTap: () {
-                ref.read(roleProvider.notifier).state = role;
-                ref.read(phoneProvider.notifier).state = phone.isEmpty ? '55 123 4567' : phone;
-                context.push('/otp');
-              }),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text.rich(TextSpan(style: tx(13, c: AppColors.ink2), children: [
+                        const TextSpan(text: 'أوافق على '),
+                        TextSpan(text: 'الشروط والأحكام', style: tx(13, c: AppColors.pri)),
+                        const TextSpan(text: ' و'),
+                        TextSpan(text: 'سياسة الخصوصية', style: tx(13, c: AppColors.pri)),
+                      ])),
+                    ),
+                  ]),
+                ),
+              AppButton('أرسل رمز التحقق', icon: LucideIcons.arrowLeft, disabled: !login && !agree, onTap: _continue),
               Center(
-                child: Text.rich(TextSpan(style: tx(14, c: AppColors.mute), children: [
-                  const TextSpan(text: 'عندك حساب؟ '),
-                  TextSpan(text: 'سجّل دخول', style: tx(14, w: w5, c: AppColors.pri)),
-                ])),
+                child: GestureDetector(
+                  onTap: () => login ? context.go('/signup') : context.push('/login'),
+                  child: Text.rich(TextSpan(style: tx(14, c: AppColors.mute), children: [
+                    TextSpan(text: login ? 'ما عندك حساب؟ ' : 'عندك حساب؟ '),
+                    TextSpan(text: login ? 'سجّل الحين' : 'سجّل دخول', style: tx(14, w: w5, c: AppColors.pri)),
+                  ])),
+                ),
               ),
             ]),
           ),
@@ -228,6 +278,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
   final focus = FocusNode();
   int seconds = 45;
   Timer? timer;
+  bool busy = false;
 
   @override
   void initState() {
@@ -259,17 +310,33 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     super.dispose();
   }
 
-  void _confirm() {
+  Future<void> _confirm() async {
+    final d = ref.read(signupDraftProvider);
+    if (d == null) {
+      context.go('/signup');
+      return;
+    }
     if (ctrl.text.length < 4) {
       showToast(context, 'أدخل الرمز كامل (4 أرقام)');
       return;
     }
-    context.go('/home');
+    setState(() => busy = true);
+    try {
+      await Api.phoneLogin(phone: d.phone, code: ctrl.text, role: d.role, name: d.name, city: d.city);
+      ref.invalidate(myProfileProvider);
+      ref.invalidate(favoriteIdsProvider);
+      if (mounted) context.go('/home');
+    } catch (e) {
+      if (mounted) showToast(context, errMsg(e).replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final phone = ref.watch(phoneProvider);
+    final phone = ref.watch(signupDraftProvider)?.phone ?? '';
+    final shown = phone.length == 9 ? '${phone.substring(0, 2)} ${phone.substring(2, 5)} ${phone.substring(5)}' : phone;
     final code = ctrl.text;
     final mm = '00:${seconds.toString().padLeft(2, '0')}';
     return Scaffold(
@@ -292,7 +359,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                 const SizedBox(height: 14),
                 Text('أرسلنا رمز مكوّن من 4 أرقام إلى', style: tx(15, c: AppColors.mute)),
                 const SizedBox(height: 14),
-                Text(ltr('+966 $phone'), style: tx(17, w: w6)),
+                Text(ltr('+966 $shown'), style: tx(17, w: w6)),
                 const SizedBox(height: 26),
                 GestureDetector(
                   onTap: () => focus.requestFocus(),
@@ -308,7 +375,10 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                           keyboardType: TextInputType.number,
                           maxLength: 4,
                           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                          onChanged: (_) => setState(() {}),
+                          onChanged: (v) {
+                            setState(() {});
+                            if (v.length == 4) _confirm();
+                          },
                         ),
                       ),
                     ),
@@ -336,10 +406,15 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                   onTap: () => context.pop(),
                   child: Text('تعديل رقم الجوال', style: tx(14, w: w5, c: AppColors.teal)),
                 ),
+                const SizedBox(height: 10),
+                Text('نسخة تجريبية — الرمز: 1234', style: tx(12, c: AppColors.ph)),
               ]),
             ),
           ),
-          Padding(padding: const EdgeInsets.fromLTRB(20, 0, 20, 24), child: AppButton('تأكيد', onTap: _confirm)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: busy ? const SizedBox(height: 54, child: Center(child: CircularProgressIndicator(color: AppColors.pri))) : AppButton('تأكيد', onTap: _confirm),
+          ),
         ]),
       ),
     );
@@ -355,9 +430,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: focusBox ? AppColors.pri : (d.isNotEmpty ? AppColors.pinkB : AppColors.chipB), width: focusBox ? 2 : 1),
       ),
-      child: d.isNotEmpty
-          ? Text(d, style: tx(28, w: w6, h: 1.2))
-          : (focusBox ? Container(width: 2, height: 28, color: AppColors.pri) : null),
+      child: d.isNotEmpty ? Text(d, style: tx(28, w: w6, h: 1.2)) : (focusBox ? Container(width: 2, height: 28, color: AppColors.pri) : null),
     );
   }
 }

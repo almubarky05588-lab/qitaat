@@ -6,6 +6,8 @@ import '../data/api.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
+export 'package:flutter/services.dart' show Clipboard, ClipboardData;
+
 // ───────────────── التحميل والأخطاء ─────────────────
 
 class Loading extends StatelessWidget {

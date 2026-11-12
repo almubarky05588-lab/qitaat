@@ -69,8 +69,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           num n(String k) => num.tryParse('${s[k] ?? 0}') ?? 0;
           final sent = n('offers_sent'), acc = n('offers_accepted');
           final rate = sent == 0 ? 0 : (acc * 100 / sent).round();
-          final daily = (s['daily'] as List? ?? const []).map((e) => num.tryParse('$e') ?? 0).toList();
-          final maxD = daily.isEmpty ? 1 : daily.reduce((a, b) => a > b ? a : b);
+          final daily = (s['daily'] as List? ?? const []).map((e) => double.tryParse('$e') ?? 0.0).toList();
+          final double maxD = daily.isEmpty ? 1.0 : daily.reduce((a, b) => a > b ? a : b);
           final today = DateTime.now();
           const dayNames = ['اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت', 'أحد'];
           return VCol(gap: 16, [
@@ -125,7 +125,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       Expanded(
                         child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
                           Container(
-                            height: 6 + 114 * (maxD == 0 ? 0 : daily[i] / maxD),
+                            height: 6.0 + 114.0 * (maxD == 0 ? 0.0 : daily[i] / maxD),
                             decoration: BoxDecoration(color: i == daily.length - 1 ? AppColors.pri : const Color(0xFFEBCFC2), borderRadius: BorderRadius.circular(8)),
                           ),
                           const SizedBox(height: 6),

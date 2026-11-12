@@ -77,6 +77,27 @@ flutter analyze --no-fatal-infos --no-fatal-warnings > /tmp/analyze.log 2>&1 || 
 grep -E " error " /tmp/analyze.log || true
 tail -1 /tmp/analyze.log
 
+step "أيقونة التطبيق"
+if ! command -v rsvg-convert >/dev/null 2>&1; then
+  HOMEBREW_NO_AUTO_UPDATE=1 brew install librsvg > /tmp/brew.log 2>&1 || { tail -20 /tmp/brew.log; }
+fi
+if command -v rsvg-convert >/dev/null 2>&1; then
+  rsvg-convert -w 1024 -h 1024 -b white assets/icon/app_icon.svg -o assets/icon/app_icon.png
+else
+  qlmanage -t -s 1024 -o /tmp assets/icon/app_icon.svg > /dev/null 2>&1
+  cp /tmp/app_icon.svg.png assets/icon/app_icon.png
+fi
+sips -g pixelWidth -g pixelHeight assets/icon/app_icon.png | tail -2
+cat > /tmp/icons-ios.yaml <<EOF
+flutter_launcher_icons:
+  image_path: "assets/icon/app_icon.png"
+  android: false
+  ios: true
+  remove_alpha_ios: true
+EOF
+dart run flutter_launcher_icons -f /tmp/icons-ios.yaml
+ls ios/Runner/Assets.xcassets/AppIcon.appiconset | head -5
+
 step "Info.plist (الاسم + نصوص الأذونات المطلوبة من Apple)"
 P=ios/Runner/Info.plist
 pset() {

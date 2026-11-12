@@ -21,6 +21,11 @@ jobs:
             rm -f test/widget_test.dart
           fi
       - run: flutter pub get
+      - name: App icon
+        run: |
+          sudo apt-get install -y librsvg2-bin > /dev/null
+          rsvg-convert -w 1024 -h 1024 -b white assets/icon/app_icon.svg -o assets/icon/app_icon.png
+          dart run flutter_launcher_icons
       - run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - run: flutter build apk --debug
       - uses: actions/upload-artifact@v4

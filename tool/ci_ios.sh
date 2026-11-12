@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 TEAM_ID="5V6TC85KRL"
 BUNDLE_ID="sa.almubarky.qitaat"
 DEFAULT_ISSUER="3aa57344-99da-4421-94f9-5aaf95c16287"
-DEFAULT_KEY_ID="DBJJJFNTJ5"
+DEFAULT_KEY_ID="NFD4XS5U9T"
 LOG=/tmp/qitaat-ci.log
 : > "$LOG"
 exec > >(tee -a "$LOG") 2>&1

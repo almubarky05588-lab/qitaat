@@ -230,6 +230,19 @@ class OrderDetailsScreen extends ConsumerWidget {
                   ]),
                 ]),
               ),
+            // للبائع: بيانات المستلم بعد الدفع (ما تظهر في الإعلان العام)
+            if (o.sellerId == myId && o.paidAt != null)
+              AppCard(
+                color: AppColors.sage,
+                border: AppColors.sageB,
+                child: VCol(gap: 10, [
+                  Text('بيانات المستلم', style: tx(16, w: w6, c: AppColors.teal)),
+                  KV('الاسم', o.buyer?.displayName ?? ''),
+                  if (o.buyer?.phone != null) KV('الجوال', ltr(o.buyer!.phone!)),
+                  if (o.buyer?.city != null) KV('المدينة', o.buyer!.city!),
+                  KV('عنوان التسليم', o.shippingAddress ?? 'ما حدده المشتري — راسله من زر المحادثة'),
+                ]),
+              ),
             if (o.carrier != null || o.shippingAddress != null)
               AppCard(
                 child: VCol(gap: 10, [
@@ -266,6 +279,8 @@ class OrderDetailsScreen extends ConsumerWidget {
                 if (o.invoiceNo != null) GestureDetector(onTap: () => context.push('/invoice/${o.id}'), child: KV('الفاتورة', ltr(o.invoiceNo!), vColor: AppColors.teal)),
               ]),
             ),
+            if (o.sellerId == myId && (o.status == 'paid' || o.status == 'preparing'))
+              AppButton('صوّر القطعة واشحنها', icon: LucideIcons.camera, onTap: () => context.push('/m/document/${o.id}')),
             if (o.buyerId == myId && o.status == 'awaiting_payment')
               AppButton('ادفع الآن', icon: LucideIcons.lock, onTap: () {
                 ref.read(checkoutOrdersProvider.notifier).state = [o.id];

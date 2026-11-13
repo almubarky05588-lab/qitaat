@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../app/state.dart';
 import '../core/media.dart';
 import '../core/product_widgets.dart';
 import '../core/theme.dart';
@@ -174,6 +173,7 @@ class PartDetailsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final lv = ref.watch(listingProvider(id));
+    final l = lv.valueOrNull;
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
@@ -186,12 +186,12 @@ class PartDetailsScreen extends ConsumerWidget {
               : _Details(p),
         ),
       ),
-      bottomNavigationBar: lv.valueOrNull?.auction == true && lv.valueOrNull!.sellerId != myId
+      bottomNavigationBar: l != null && l.auction && l.sellerId != myId && l.status == 'active'
           ? BottomBar(
               child: Row(children: [
-                Expanded(child: AppButton('اعرض سومتك', icon: LucideIcons.gavel, onTap: () => showBidSheet(context, ref, lv.valueOrNull!))),
+                Expanded(child: AppButton('اعرض سومتك', icon: LucideIcons.gavel, onTap: () => showBidSheet(context, ref, l))),
                 const SizedBox(width: 10),
-                AppButton('مراسلة', icon: LucideIcons.messageSquare, v: BtnV.tealOut, expand: false, onTap: () => openChat(context, lv.valueOrNull!.sellerId, listingId: id)),
+                AppButton('مراسلة', icon: LucideIcons.messageSquare, v: BtnV.tealOut, expand: false, onTap: () => openChat(context, l.sellerId, listingId: id)),
               ]),
             )
           : null,
@@ -223,9 +223,14 @@ class _DetailsState extends ConsumerState<_Details> {
   @override
   void initState() {
     super.initState();
-    Api.isFollowing(widget.p.sellerId).then((v) {
+    _loadFollow();
+  }
+
+  Future<void> _loadFollow() async {
+    try {
+      final v = await Api.isFollowing(widget.p.sellerId);
       if (mounted) setState(() => following = v);
-    }).catchError((_) {});
+    } catch (_) {}
   }
 
   @override
@@ -284,6 +289,7 @@ class _DetailsState extends ConsumerState<_Details> {
     final fav = favs.contains(p.id);
     final isOwner = p.sellerId == myId;
     final seller = p.seller;
+    final available = p.status == 'active' && p.quantity > 0;
     final bids = p.auction ? ref.watch(bidsProvider(p.id)).valueOrNull ?? const <Bid>[] : const <Bid>[];
     final comments = ref.watch(commentsProvider(p.id)).valueOrNull ?? const [];
     final similar = (ref.watch(similarProvider(p.brand ?? '')).valueOrNull ?? const <Listing>[]).where((e) => e.id != p.id).toList();
@@ -328,12 +334,14 @@ class _DetailsState extends ConsumerState<_Details> {
             ]),
           ),
         if (p.auction) const PositionedDirectional(top: 16, start: 20, child: StatusBadge('على السوم', icon: LucideIcons.gavel)),
+        if (!available) PositionedDirectional(top: 16, end: 20, child: StatusBadge.grey(p.status == 'sold' || p.quantity <= 0 ? 'مباعة' : 'غير متاحة')),
       ]),
     );
 
     Widget pill(IconData ic, String t) => AppChip(t, icon: ic, bg: AppColors.pillBg, noBorder: true, iconColor: AppColors.ink2, px: 14, py: 8);
 
     final sellerCard = AppCard(
+      onTap: () => context.push('/store/${p.sellerId}'),
       child: Row(children: [
         Avatar(size: p.auction ? 52 : 56),
         const SizedBox(width: 12),
@@ -363,8 +371,9 @@ class _DetailsState extends ConsumerState<_Details> {
         Text(p.priceLabel, style: tx(28, w: w7, c: AppColors.teal)),
         Wrap(spacing: 8, runSpacing: 8, children: [
           pill(LucideIcons.badgeCheck, p.condition),
+          pill(LucideIcons.package, fmtQty(available ? p.quantity : 0)),
           if (p.city != null) pill(LucideIcons.mapPin, p.city!),
-          pill(LucideIcons.clock, fmtDate(p.createdAt)),
+          pill(LucideIcons.clock, fmtAgo(p.createdAt)),
           if (p.category != null) pill(LucideIcons.shapes, p.category!),
           if (!p.delivery.contains('shipping')) pill(LucideIcons.store, 'استلام بدون شحن'),
         ]),
@@ -378,16 +387,20 @@ class _DetailsState extends ConsumerState<_Details> {
         Text('ملاحظات', style: tx(16, w: w6)),
         Text((p.description ?? '').isEmpty ? '—' : p.description!, style: tx(15, c: AppColors.ink2)),
         if (isOwner) AppButton('إدارة إعلاني', icon: LucideIcons.slidersHorizontal, onTap: () => context.push('/m/listings')),
-        if (!isOwner && p.status == 'active')
+        if (!isOwner && available)
           AppButton('أضف للسلة', icon: LucideIcons.shoppingCart, onTap: () async {
             final cart = ref.read(cartProvider).valueOrNull ?? const [];
             final cur = cart.where((e) => e.$1.id == p.id).map((e) => e.$2).fold<int>(0, (a, b) => a + b);
+            if (cur + 1 > p.quantity) {
+              showToast(context, 'الكمية المتوفرة ${p.quantity} فقط');
+              return;
+            }
             if (await run(context, () => Api.setCartQty(p.id, cur + 1), success: 'أُضيفت للسلة')) ref.invalidate(cartProvider);
           }),
-        if (!isOwner && p.status != 'active') const Center(child: StatusBadge.grey('مباعة')),
+        if (!isOwner && !available) const Center(child: StatusBadge.grey('مباعة — غير متاحة للشراء')),
         if (!isOwner)
           Row(children: [
-            Expanded(child: AppButton('اتصال', icon: LucideIcons.phone, onTap: () => showToast(context, 'التواصل عبر المحادثة داخل التطبيق'))),
+            Expanded(child: AppButton('ملف البائع', icon: LucideIcons.store, onTap: () => context.push('/store/${p.sellerId}'))),
             const SizedBox(width: 12),
             Expanded(child: AppButton('مراسلة', icon: LucideIcons.messageSquare, v: BtnV.tealOut, onTap: () => openChat(context, p.sellerId, listingId: p.id))),
           ]),
@@ -422,6 +435,7 @@ class _DetailsState extends ConsumerState<_Details> {
         ),
         Wrap(spacing: 8, runSpacing: 8, children: [
           ConditionBadge(p.condition),
+          AppChip(fmtQty(available ? p.quantity : 0), icon: LucideIcons.package, bg: AppColors.pillBg, noBorder: true, fs: 13, px: 12, py: 6),
           if (p.city != null) AppChip(p.city!, icon: LucideIcons.mapPin, bg: AppColors.pillBg, noBorder: true, fs: 13, px: 12, py: 6),
           if (p.category != null) AppChip(p.category!, icon: LucideIcons.shapes, bg: AppColors.pillBg, noBorder: true, fs: 13, px: 12, py: 6),
         ]),
@@ -681,6 +695,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
               return VCol(gap: 12, [
                 for (final st in s.data!)
                   AppCard(
+                    onTap: () => context.push('/store/${st.id}'),
                     child: Row(children: [
                       const Avatar(size: 48),
                       const SizedBox(width: 12),

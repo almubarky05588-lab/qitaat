@@ -214,6 +214,21 @@ async function log(action, type, id, details) {
   await sb.from('admin_log').insert({ admin_id: ME.id, action, target_type: type, target_id: id ? String(id) : null, details: details || null });
 }
 
+// الباقات + المستندات الخاصة (تُفتح برابط مؤقت 10 دقائق للإدارة فقط)
+const PLAN_LABEL = { free: 'لولو المجانية', pro: 'لولو برو', pro_max: 'لولو برو ماكس' };
+const docBtn = (path, label) => path ? `<button class="btn soft sm" data-doc="${esc(path)}">📄 ${esc(label)}</button>` : `<span class="tag red">${esc(label)}: غير مرفق</span>`;
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-doc]');
+  if (!b) return;
+  e.preventDefault();
+  const path = b.dataset.doc;
+  if (/^https?:/.test(path)) return void window.open(path, '_blank');
+  const w = window.open('', '_blank');
+  const { data, error } = await sb.storage.from('docs').createSignedUrl(path, 600);
+  if (error) { if (w) w.close(); alert('تعذّر فتح المستند: ' + error.message); return; }
+  if (w) w.location = data.signedUrl; else location.href = data.signedUrl;
+});
+
 // ───────── النافذة الجانبية ─────────
 function drawer(title, html) {
   $('#dTitle').textContent = title; $('#dBody').innerHTML = html;
@@ -273,7 +288,7 @@ const PAGES = [
   ['notify', '🔔', 'الإشعارات', ['super', 'support', 'content']],
   ['sec', '', 'الإعدادات'],
   ['catalog', '🗂️', 'القوائم والمحتوى', ['super', 'content']],
-  ['settings', '⚙️', 'إعدادات التطبيق', ['super']],
+  ['settings', '⚙️', 'إعدادات التطبيق والباقات', ['super']],
   ['log', '🧾', 'سجل الإجراءات', ['super']],
 ];
 let BADGES = {};
@@ -316,7 +331,7 @@ VIEWS.dash = async (v) => {
   v.innerHTML = `
     <div class="hero">
       <div><small>قيمة المبيعات (آخر ${days} يوم)</small><b>${money(s.gmv)}</b></div>
-      <div><small>عمولة المنصة</small><b>${money(s.commission)}</b></div>
+      <div><small>عمولة المنصة (حسب باقة البائع)</small><b>${money(s.commission)}</b></div>
       <div><small>الطلبات</small><b>${num(s.orders)}</b></div>
       <div><small>مستخدمين جدد</small><b>${num(s.new_users)}</b></div>
     </div>
@@ -361,7 +376,7 @@ VIEWS.users = async (v, p) => {
       ['النوع', (r) => r.role === 'merchant' ? '<span class="tag amber">تاجر</span>' : '<span class="tag teal">مشتري</span>'],
       ['المدينة', (r) => esc(r.city || '—')],
       ['الحالة', (r) => [r.verified ? '<span class="tag teal">✓ موثّق</span>' : '', r.banned ? '<span class="tag red">موقوف</span>' : '', r.is_admin ? `<span class="tag pri">${ROLE_AR[r.admin_role] || 'مدير'}</span>` : '', r.verify_status === 'pending' ? '<span class="tag amber">بانتظار التوثيق</span>' : ''].join(' ') || '<span class="muted">—</span>'],
-      ['الباقة', (r) => esc(r.plan)],
+      ['الباقة', (r) => esc(PLAN_LABEL[r.plan] || r.plan)],
       ['التسجيل', (r) => `<span class="nowrap">${d(r.created_at)}</span>`],
     ], rows, (r) => userDrawer(r.id, load), 'لا يوجد مستخدمين');
   };
@@ -374,7 +389,7 @@ async function userDrawer(id, reload) {
   const b = drawer('ملف المستخدم', ''); loading(b);
   const [u, pay, stats] = await Promise.all([
     must(sb.from('profiles').select('*').eq('id', id).single()),
-    sb.from('payout_accounts').select('iban').eq('user_id', id).maybeSingle(),
+    sb.from('payout_accounts').select('iban,holder_name,bank_name').eq('user_id', id).maybeSingle(),
     Promise.all([
       sb.from('listings').select('id', { count: 'exact', head: true }).eq('seller_id', id),
       sb.from('orders').select('id', { count: 'exact', head: true }).eq('buyer_id', id),
@@ -389,7 +404,7 @@ async function userDrawer(id, reload) {
     <div class="card">
       <div class="row" style="margin-bottom:10px">
         <div class="logo-mark" style="width:52px;height:52px;border-radius:50%;overflow:hidden">${u.avatar_url ? `<img src="${esc(u.avatar_url)}" style="width:100%;height:100%;object-fit:cover">` : `<b style="color:#fff;font-size:20px">${esc((u.name || '؟')[0])}</b>`}</div>
-        <div class="grow"><b style="font-size:16px">${esc(u.name || 'بدون اسم')}</b><div class="muted">${phone(u.phone)} · ${u.role === 'merchant' ? 'تاجر' : 'مشتري'}</div></div>
+        <div class="grow"><b style="font-size:16px">${esc(u.name || 'بدون اسم')}</b><div class="muted">${phone(u.phone)} · ${u.role === 'merchant' ? 'تاجر' : 'مشتري'} · ${esc(PLAN_LABEL[u.plan] || u.plan)}</div></div>
       </div>
       <dl class="kv">
         <dt>التسجيل</dt><dd>${dt(u.created_at)}</dd>
@@ -399,7 +414,8 @@ async function userDrawer(id, reload) {
         <dt>مبيعاته</dt><dd><a href="#orders?seller=${u.id}">${cOS} طلب</a></dd>
         <dt>طلبات القطع</dt><dd>${cR}</dd>
         <dt>عروض قدّمها</dt><dd>${cOf}</dd>
-        ${u.role === 'merchant' ? `<dt>الآيبان</dt><dd class="ltr">${esc(pay.data?.iban || '—')}</dd><dt>السجل التجاري</dt><dd>${esc(u.store_cr || '—')} ${u.cr_doc_url ? `· <a href="${esc(u.cr_doc_url)}" target="_blank">عرض المستند</a>` : ''}</dd><dt>الرقم الضريبي</dt><dd>${esc(u.store_vat || '—')}</dd>` : ''}
+        <dt>الحساب البنكي</dt><dd>${esc(pay.data?.holder_name || '—')} · ${esc(pay.data?.bank_name || '—')}<br><span class="ltr">${esc(pay.data?.iban || '—')}</span></dd>
+        ${u.role === 'merchant' ? `<dt>السجل التجاري</dt><dd>${esc(u.store_cr || '—')} ${docBtn(u.cr_doc_url, 'المستند')}</dd><dt>الرقم الضريبي</dt><dd>${esc(u.store_vat || '—')} ${docBtn(u.vat_doc_url, 'الشهادة')}</dd><dt>العنوان الوطني</dt><dd class="ltr">${esc(u.national_address || '—')}</dd>` : ''}
       </dl>
       <div class="row">
         <button class="btn soft sm" id="uMsg">🔔 إرسال إشعار</button>
@@ -414,7 +430,7 @@ async function userDrawer(id, reload) {
         <div class="field grow"><label>نوع الحساب</label><select class="in" id="uRole"><option value="buyer">مشتري</option><option value="merchant">تاجر / مورد</option></select></div>
       </div>
       <div class="row">
-        <div class="field grow"><label>الباقة</label><select class="in" id="uPlan"><option value="free">المجانية</option><option value="lulu">لولو</option><option value="pro">لولو برو</option></select></div>
+        <div class="field grow"><label>الباقة</label><select class="in" id="uPlan"><option value="free">لولو المجانية</option><option value="pro">لولو برو</option><option value="pro_max">لولو برو ماكس</option></select></div>
         <div class="field grow"><label>حالة التوثيق</label><select class="in" id="uVs"><option value="none">بدون</option><option value="pending">بانتظار المراجعة</option><option value="approved">مقبول</option><option value="rejected">مرفوض</option></select></div>
       </div>
       ${u.role === 'merchant' ? `<div class="field"><label>الماركات (افصل بفاصلة)</label><input class="in" id="uBrands" value="${esc((u.brands || []).join('، '))}"></div>
@@ -481,10 +497,12 @@ VIEWS.verify = async (v) => {
         <dl class="kv">
           <dt>الجوال</dt><dd>${phone(u.phone)}</dd><dt>المدينة</dt><dd>${esc(u.city || '—')}</dd>
           <dt>السجل التجاري</dt><dd>${esc(u.store_cr || '—')}</dd><dt>الرقم الضريبي</dt><dd>${esc(u.store_vat || '—')}</dd>
+          <dt>العنوان الوطني</dt><dd class="ltr">${esc(u.national_address || '—')}</dd>
+          <dt>الباقة</dt><dd>${esc(PLAN_LABEL[u.plan] || u.plan)}</dd>
           <dt>الماركات</dt><dd>${esc((u.brands || []).join('، ') || '—')}</dd>
           ${u.verify_note ? `<dt>ملاحظة</dt><dd>${esc(u.verify_note)}</dd>` : ''}
         </dl>
-        ${u.cr_doc_url ? `<a href="${esc(u.cr_doc_url)}" target="_blank"><img src="${esc(u.cr_doc_url)}" style="width:100%;max-height:220px;object-fit:contain;background:var(--chip);border-radius:12px;margin-bottom:12px"></a>` : '<div class="alert" style="margin-bottom:12px">ما رفع مستند السجل التجاري</div>'}
+        <div class="row" style="margin-bottom:12px;gap:8px">${docBtn(u.cr_doc_url, 'السجل التجاري')} ${docBtn(u.vat_doc_url, 'شهادة التسجيل الضريبي')}</div>
         <div class="row">
           ${!u.verified ? `<button class="btn teal sm" data-ok="${u.id}">✓ توثيق</button>` : `<button class="btn out sm" data-un="${u.id}">إلغاء التوثيق</button>`}
           ${u.verify_status !== 'rejected' && !u.verified ? `<button class="btn red sm" data-no="${u.id}">رفض</button>` : ''}
@@ -523,9 +541,10 @@ VIEWS.listings = async (v, p) => {
     if ($('#fT').value) q = q.eq('sale_type', $('#fT').value);
     if (p.seller) q = q.eq('seller_id', p.seller);
     const rows = await must(q);
+    const boosted = (r) => r.featured_until && new Date(r.featured_until) > new Date();
     $('#res').innerHTML = table([
       ['', (r) => r.images?.[0] ? `<img class="thumb" style="width:48px;height:48px" src="${esc(r.images[0])}">` : '<div class="thumb" style="width:48px;height:48px"></div>'],
-      ['الإعلان', (r) => `<b>${esc(r.title)}</b>${r.featured ? ' <span class="tag pri">⭐ مميز</span>' : ''}<span class="sub">${esc([r.brand, r.model, r.year_from].filter(Boolean).join(' '))} · ${esc(r.condition)}</span>`],
+      ['الإعلان', (r) => `<b>${esc(r.title)}</b>${r.featured ? ' <span class="tag pri">⭐ مميز (إدارة)</span>' : ''}${boosted(r) ? ` <span class="tag amber">⭐ مميز حتى ${new Date(r.featured_until).toLocaleTimeString('ar-SA', { timeStyle: 'short' })}</span>` : ''}<span class="sub">${esc([r.brand, r.model, r.year_from].filter(Boolean).join(' '))} · ${esc(r.condition)}</span>`],
       ['البائع', (r) => `${esc(r.seller?.name || '—')}${r.seller?.verified ? ' ✓' : ''}`],
       ['السعر', (r) => r.sale_type === 'auction' ? `<span class="tag amber">على السوم</span><span class="sub">${(r.bids || []).length} سومة · أعلى ${money(Math.max(0, ...(r.bids || []).map((b) => +b.amount)))}</span>` : `<b>${money(r.price)}</b>`],
       ['الكمية', (r) => r.quantity],
@@ -554,6 +573,7 @@ async function listingDrawer(id, reload) {
         <dt>التسليم</dt><dd>${(l.delivery || []).map((x) => (x === 'shipping' ? 'شحن' : 'استلام')).join(' + ')}</dd>
         <dt>المشاهدات</dt><dd>${num(l.views)}</dd>
         <dt>نُشر</dt><dd>${dt(l.created_at)}</dd>
+        ${l.featured_until ? `<dt>مميز (باقة) حتى</dt><dd>${dt(l.featured_until)}</dd>` : ''}
         ${l.sale_type === 'auction' ? `<dt>ينتهي السوم</dt><dd>${dt(l.auction_ends_at)}</dd>` : ''}
       </dl>
     </div>
@@ -569,7 +589,7 @@ async function listingDrawer(id, reload) {
         <div class="field grow"><label>حالة القطعة</label><input class="in" id="eC" value="${esc(l.condition)}"></div>
       </div>
       <div class="field"><label>الوصف</label><textarea class="in" id="eD">${esc(l.description || '')}</textarea></div>
-      <label class="check"><input type="checkbox" id="eF" ${l.featured ? 'checked' : ''}> ⭐ إعلان مميز (يظهر أول في التطبيق)</label>
+      <label class="check"><input type="checkbox" id="eF" ${l.featured ? 'checked' : ''}> ⭐ إعلان مميز دائم من الإدارة (يظهر أول في التطبيق)</label>
       <div class="row"><button class="btn" id="eSave">حفظ</button><button class="btn red" id="eDel">حذف الإعلان</button></div>
     </div>
     ${l.sale_type === 'auction' ? `<div class="card"><h3>السومات (${bids.length})</h3>${bids.length ? bids.map((x, i) => `
@@ -626,6 +646,7 @@ async function requestDrawer(id, reload) {
   const b = drawer('طلب قطعة', ''); loading(b);
   const r = await must(sb.from('part_requests').select('*, buyer:profiles!part_requests_buyer_id_fkey(id,name,phone), offers(*, supplier:profiles!offers_supplier_id_fkey(id,name,phone,verified))').eq('id', id).single());
   const { count: reached } = await sb.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'merchant').contains('brands', [r.brand]);
+  const cats = (r.parts || []).map((p, i) => `${esc(p)}${(r.part_categories || [])[i] ? ` <span class="tag">${esc(r.part_categories[i])}</span>` : ''}`).join('<br>');
   b.innerHTML = `
     <div class="card">
       <h3>${esc((r.parts || []).join('، '))}</h3>
@@ -633,10 +654,10 @@ async function requestDrawer(id, reload) {
         <dt>السيارة</dt><dd>${esc([r.brand, r.model, r.year].filter(Boolean).join(' '))}</dd>
         ${r.vin ? `<dt>رقم الهيكل</dt><dd class="ltr">${esc(r.vin)}</dd>` : ''}
         <dt>الحالة المطلوبة</dt><dd>${esc(r.condition)}</dd>
-        <dt>التصنيف</dt><dd>${esc(r.category || '—')}</dd>
+        <dt>القطع والتصنيف</dt><dd>${cats || '—'}</dd>
         <dt>المشتري</dt><dd><a href="#" id="rB">${esc(r.buyer?.name || '—')}</a> · ${phone(r.buyer?.phone)}</dd>
         <dt>المدينة</dt><dd>${esc(r.city || '—')}</dd>
-        <dt>وصل لـ</dt><dd>${num(reached)} مورد متخصص في ${esc(r.brand)}</dd>
+        <dt>موردين الماركة</dt><dd>${num(reached)} مورد متخصص في ${esc(r.brand)}</dd>
         <dt>أُنشئ</dt><dd>${dt(r.created_at)}</dd><dt>ينتهي</dt><dd>${dt(r.expires_at)}</dd>
         <dt>الحالة</dt><dd>${tagOf(REQ_ST, r.status)}</dd>
       </dl>
@@ -811,7 +832,7 @@ VIEWS.notify = async (v, p) => {
       <div class="field" id="nBrW"><label>الماركة</label><select class="in" id="nBr">${brands.map((b) => `<option>${esc(b.value)}</option>`).join('')}</select></div>
       <div class="field"><label>العنوان</label><input class="in" id="nT" placeholder="مثال: عروض نهاية الأسبوع 🔥"></div>
       <div class="field"><label>النص</label><textarea class="in" id="nB" placeholder="نص الإشعار..."></textarea></div>
-      <div class="field"><label>رابط داخل التطبيق (اختياري)</label><select class="in" id="nL"><option value="">بدون</option><option value="/request-part">صفحة اطلب قطعة</option><option value="/search">البحث</option><option value="/m/requests">طلبات العملاء (للتجار)</option><option value="/sell">أبيع قطعة (للتجار)</option><option value="/m/subscription">الباقات</option></select></div>
+      <div class="field"><label>رابط داخل التطبيق (اختياري)</label><select class="in" id="nL"><option value="">بدون</option><option value="/request-part">صفحة اطلب قطعة</option><option value="/search">البحث</option><option value="/m/requests">طلبات العملاء (للتجار)</option><option value="/sell">أبيع قطعة</option><option value="/m/subscription">الباقات</option></select></div>
       <button class="btn block" id="nS">إرسال الآن</button>
       <p class="muted" style="font-size:12px;margin:10px 0 0">يظهر في صفحة الإشعارات داخل التطبيق. إشعارات الجوال الخارجية تتفعّل لاحقاً.</p>
     </div>
@@ -835,7 +856,7 @@ VIEWS.notify = async (v, p) => {
 
 // القوائم
 VIEWS.catalog = async (v) => {
-  const kinds = [['brand', 'الماركات'], ['model', 'الموديلات'], ['category', 'أصناف القطع'], ['condition', 'حالات القطعة'], ['city', 'المدن'], ['carrier', 'شركات الشحن']];
+  const kinds = [['brand', 'الماركات'], ['model', 'الموديلات'], ['category', 'تصنيفات القطع'], ['condition', 'حالات القطعة'], ['city', 'المدن'], ['carrier', 'شركات الشحن']];
   let kind = sessionStorage.getItem('ckind') || 'brand', parent = '';
   v.innerHTML = `<div class="alert teal">أي تعديل هنا يظهر في التطبيق مباشرة عند المستخدمين (القوائم تتحدث عند فتح التطبيق).</div><div class="tabs" id="tb"></div><div id="res"></div>`;
   const load = async () => {
@@ -854,6 +875,7 @@ VIEWS.catalog = async (v) => {
       ${table([
         ['الترتيب', (r) => `<input class="in" type="number" style="width:70px" data-sort="${r.id}" value="${r.sort}">`],
         ['القيمة', (r) => `<input class="in" data-val="${r.id}" value="${esc(r.value)}">`],
+        ...(kind === 'category' ? [['أمثلة توضيحية', (r) => `<input class="in" data-hint="${r.id}" value="${esc(r.hint || '')}" placeholder="مثال: صدام، رفرف، كبوت">`]] : []),
         ...(kind === 'brand' ? [['تظهر في الرئيسية', (r) => `<input type="checkbox" data-pop="${r.id}" ${r.popular ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--pri)">`]] : []),
         ['مفعّل', (r) => `<input type="checkbox" data-act="${r.id}" ${r.active ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--pri)">`],
         ['', (r) => `<button class="btn red sm" data-del="${r.id}">حذف</button>`],
@@ -862,6 +884,7 @@ VIEWS.catalog = async (v) => {
     const upd = async (id, patch) => { if (await act(() => must(sb.from('catalog').update(patch).eq('id', id)), 'تم')) log('تعديل قائمة', 'catalog', id, patch); };
     $$('[data-sort]').forEach((x) => (x.onchange = () => upd(x.dataset.sort, { sort: +x.value })));
     $$('[data-val]').forEach((x) => (x.onchange = () => upd(x.dataset.val, { value: x.value.trim() })));
+    $$('[data-hint]').forEach((x) => (x.onchange = () => upd(x.dataset.hint, { hint: x.value.trim() || null })));
     $$('[data-pop]').forEach((x) => (x.onchange = () => upd(x.dataset.pop, { popular: x.checked })));
     $$('[data-act]').forEach((x) => (x.onchange = () => upd(x.dataset.act, { active: x.checked })));
     $$('[data-del]').forEach((x) => (x.onclick = async () => { if (confirm('حذف؟') && (await act(() => must(sb.from('catalog').delete().eq('id', x.dataset.del)), 'تم الحذف'))) { log('حذف من قائمة', 'catalog', x.dataset.del); load(); } }));

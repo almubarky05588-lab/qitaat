@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import '../app/state.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
+import 'merchant.dart' show CustomerRequestsScreen;
+import 'requests.dart' show MyRequestsScreen;
 
 /// الهيكل الرئيسي: الشريط السفلي + زر الإضافة العائم
 class MainShell extends StatelessWidget {
@@ -13,45 +17,47 @@ class MainShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
+    const barH = 66.0;
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: shell,
       bottomNavigationBar: SizedBox(
-        height: 72 + bottomInset + 28,
+        height: barH + bottomInset + 30,
         child: Stack(clipBehavior: Clip.none, alignment: Alignment.bottomCenter, children: [
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
             child: Container(
-              height: 72 + bottomInset,
-              padding: EdgeInsets.fromLTRB(20, 12, 20, bottomInset > 0 ? bottomInset : 12),
+              height: barH + bottomInset,
+              padding: EdgeInsets.only(left: 8, right: 8, top: 10, bottom: bottomInset),
               decoration: BoxDecoration(
                 color: AppColors.white,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                 boxShadow: [BoxShadow(color: const Color(0xFF6B4D33).withOpacity(0.08), blurRadius: 20, offset: const Offset(0, -4))],
               ),
-              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                _tab(0, LucideIcons.home, 'الرئيسية'),
-                _tab(1, LucideIcons.shoppingBag, 'مشترياتي'),
-                const SizedBox(width: 64),
-                _tab(2, LucideIcons.archive, 'طلبات القطع'),
-                _tab(3, LucideIcons.user, 'حسابي'),
+              // كل تبويب يأخذ نفس العرض، والنص يتوسّط تحت أيقونته بالضبط
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: _tab(0, LucideIcons.home, 'الرئيسية')),
+                Expanded(child: _tab(1, LucideIcons.shoppingBag, 'مشترياتي')),
+                const SizedBox(width: 76),
+                Expanded(child: _tab(2, LucideIcons.archive, 'طلبات')),
+                Expanded(child: _tab(3, LucideIcons.user, 'حسابي')),
               ]),
             ),
           ),
           Positioned(
-            bottom: 72 + bottomInset - 34,
+            bottom: barH + bottomInset - 34,
             child: GestureDetector(
               onTap: () => showAddSheet(context),
               child: Container(
-                width: 74,
-                height: 74,
+                width: 72,
+                height: 72,
                 decoration: const BoxDecoration(color: AppColors.bg, shape: BoxShape.circle),
                 alignment: Alignment.center,
                 child: Container(
-                  width: 62,
-                  height: 62,
+                  width: 60,
+                  height: 60,
                   decoration: BoxDecoration(
                     color: AppColors.pri,
                     shape: BoxShape.circle,
@@ -73,15 +79,25 @@ class MainShell extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => shell.goBranch(i, initialLocation: i == shell.currentIndex),
-      child: SizedBox(
-        width: 66,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 24, color: c),
-          const SizedBox(height: 4),
-          Text(label, style: tx(12, w: on ? w5 : w4, c: c, h: 1.2), maxLines: 1),
-        ]),
-      ),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Icon(icon, size: 24, color: c),
+        const SizedBox(height: 4),
+        SizedBox(
+          width: double.infinity,
+          child: Text(label, textAlign: TextAlign.center, style: tx(12, w: on ? w5 : w4, c: c, h: 1.2), maxLines: 1, overflow: TextOverflow.fade, softWrap: false),
+        ),
+      ]),
     );
+  }
+}
+
+/// تبويب «طلبات»: المشتري يشوف طلباته وعروضها — التاجر يشوف طلبات العملاء المطابقة لتخصصه
+class RequestsTab extends ConsumerWidget {
+  const RequestsTab({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final merchant = ref.watch(roleProvider) == UserRole.merchant;
+    return merchant ? const CustomerRequestsScreen(inTab: true) : const MyRequestsScreen();
   }
 }
 
@@ -114,7 +130,7 @@ void showAddSheet(BuildContext context) {
         Navigator.pop(context);
         context.push('/sell');
       }),
-      option(LucideIcons.search, 'أبحث عن قطعة', 'طلبك ينتشر لكل الموردين', () {
+      option(LucideIcons.search, 'أبحث عن قطعة', 'طلبك يوصل للموردين المتخصصين', () {
         Navigator.pop(context);
         context.push('/request-part');
       }),

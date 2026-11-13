@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -318,15 +320,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   Future<void> _pickDoc(bool isCr) async {
     try {
-      final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'], withData: true);
-      final f = res?.files.single;
-      if (f == null || f.bytes == null) return;
-      if (f.size > 10 * 1024 * 1024) {
+      final f = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png']);
+      if (f == null) return;
+      final bytes = await f.readAsBytes();
+      if (bytes.length > 10 * 1024 * 1024) {
         if (mounted) showToast(context, 'حجم الملف أكبر من 10 ميقا');
         return;
       }
       if (mounted) showToast(context, 'جاري رفع الملف...');
-      final path = await Api.uploadDoc(f.bytes!, f.name);
+      final path = await Api.uploadDoc(Uint8List.fromList(bytes), f.name);
       if (mounted) setState(() => isCr ? crDoc = path : vatDoc = path);
     } catch (e) {
       if (mounted) showToast(context, errMsg(e));

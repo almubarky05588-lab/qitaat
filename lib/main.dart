@@ -32,6 +32,12 @@ class QitaatApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      // الضغط في أي مكان خارج حقول الكتابة يقفل لوحة المفاتيح (والنص يبقى)
+      builder: (context, child) => GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: child ?? const SizedBox(),
+      ),
     );
   }
 }

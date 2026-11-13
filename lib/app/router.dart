@@ -11,6 +11,7 @@ import '../features/orders.dart';
 import '../features/requests.dart';
 import '../features/shell.dart';
 import '../features/social.dart';
+import '../features/store.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
 
@@ -32,7 +33,7 @@ final appRouter = GoRouter(
       branches: [
         StatefulShellBranch(routes: [GoRoute(path: '/home', builder: (c, s) => const HomeScreen())]),
         StatefulShellBranch(routes: [GoRoute(path: '/orders', builder: (c, s) => const MyOrdersScreen())]),
-        StatefulShellBranch(routes: [GoRoute(path: '/requests', builder: (c, s) => const MyRequestsScreen())]),
+        StatefulShellBranch(routes: [GoRoute(path: '/requests', builder: (c, s) => const RequestsTab())]),
         StatefulShellBranch(routes: [GoRoute(path: '/account', builder: (c, s) => const AccountScreen())]),
       ],
     ),
@@ -40,6 +41,7 @@ final appRouter = GoRouter(
     // المشتري
     _r('/search', (s) => SearchScreen(query: s.uri.queryParameters['q'] ?? '', brand: s.uri.queryParameters['brand'])),
     _r('/part/:id', (s) => PartDetailsScreen(id: s.pathParameters['id']!)),
+    _r('/store/:id', (s) => StoreScreen(id: s.pathParameters['id']!)),
     _r('/favorites', (s) => const FavoritesScreen()),
     _r('/cart', (s) => const CartScreen()),
     _r('/checkout', (s) => const PaymentScreen()),
@@ -47,6 +49,7 @@ final appRouter = GoRouter(
     _r('/invoices', (s) => const InvoicesScreen()),
     _r('/request-part', (s) => const RequestPartScreen()),
     _r('/request-sent/:id', (s) => RequestSentScreen(id: s.pathParameters['id']!)),
+    _r('/my-requests', (s) => const Scaffold(backgroundColor: Color(0xFFF6F0E7), body: MyRequestsScreen(withBack: true))),
     _r('/offers/:id', (s) => OffersScreen(id: s.pathParameters['id']!)),
     _r('/order/:id', (s) => OrderDetailsScreen(id: s.pathParameters['id']!)),
     _r('/notifications', (s) => const NotificationsScreen()),

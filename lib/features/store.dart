@@ -195,8 +195,19 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
   @override
   void initState() {
     super.initState();
-    Api.isFollowing(widget.id).then((v) => mounted ? setState(() => following = v) : null).catchError((_) => null);
-    Api.followersCount(widget.id).then((v) => mounted ? setState(() => followers = v) : null).catchError((_) => null);
+    _loadSocial();
+  }
+
+  Future<void> _loadSocial() async {
+    try {
+      final f = await Api.isFollowing(widget.id);
+      final n = await Api.followersCount(widget.id);
+      if (!mounted) return;
+      setState(() {
+        following = f;
+        followers = n;
+      });
+    } catch (_) {}
   }
 
   @override

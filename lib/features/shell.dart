@@ -6,7 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../app/state.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
-import 'merchant.dart' show CustomerRequestsScreen;
+import 'merchant_plus.dart' show CustomerRequestsPage;
 import 'requests.dart' show MyRequestsScreen;
 
 /// الهيكل الرئيسي: الشريط السفلي + زر الإضافة العائم
@@ -97,7 +97,7 @@ class RequestsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final merchant = ref.watch(roleProvider) == UserRole.merchant;
-    return merchant ? const CustomerRequestsScreen(inTab: true) : const MyRequestsScreen();
+    return merchant ? const CustomerRequestsPage(inTab: true) : const MyRequestsScreen();
   }
 }
 

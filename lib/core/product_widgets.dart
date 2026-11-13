@@ -15,16 +15,18 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       padding: const EdgeInsets.all(14),
+      border: p.boosted ? AppColors.pinkB : null,
       onTap: () => context.push('/part/${p.id}'),
       child: Row(children: [
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (p.boosted) const Padding(padding: EdgeInsets.only(bottom: 4), child: StatusBadge('مميز', icon: LucideIcons.star)),
             Text(p.title, style: tx(17, w: w5, c: AppColors.teal)),
             Text(p.priceLabel, style: tx(19, w: w6, c: p.auction ? AppColors.pri : AppColors.teal)),
             const SizedBox(height: 4),
             Wrap(spacing: 10, runSpacing: 4, children: [
               MetaItem(LucideIcons.user, p.sellerName),
-              MetaItem(LucideIcons.clock, fmtDate(p.createdAt)),
+              MetaItem(LucideIcons.clock, fmtAgo(p.createdAt)),
               if (p.city != null) MetaItem(LucideIcons.mapPin, p.city!),
             ]),
           ]),
@@ -45,6 +47,7 @@ class ProductTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       padding: const EdgeInsets.all(10),
+      border: p.boosted ? AppColors.pinkB : null,
       onTap: () => context.push('/part/${p.id}'),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         PartThumb(width: double.infinity, height: 120, radius: 14, heart: true, fav: fav, imageUrl: p.cover),
@@ -53,7 +56,10 @@ class ProductTile extends StatelessWidget {
         const SizedBox(height: 6),
         Text(p.priceLabel, style: tx(16, w: w6, c: p.auction ? AppColors.pri : AppColors.teal)),
         const SizedBox(height: 6),
-        if (p.city != null) MetaItem(LucideIcons.mapPin, p.city!),
+        Wrap(spacing: 8, runSpacing: 4, children: [
+          MetaItem(LucideIcons.clock, fmtAgo(p.createdAt)),
+          if (p.city != null) MetaItem(LucideIcons.mapPin, p.city!),
+        ]),
       ]),
     );
   }

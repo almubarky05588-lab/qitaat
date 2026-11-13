@@ -42,6 +42,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     try {
       final ids = await Api.checkoutCart(null);
       ref.invalidate(cartProvider);
+      ref.invalidate(myOrdersProvider);
       if (ids.isEmpty) {
         if (mounted) showToast(context, 'القطع في السلة ما عادت متوفرة');
         return;
@@ -61,8 +62,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     final items = cv.valueOrNull ?? const <(Listing, int)>[];
     final sub = items.fold<num>(0, (a, e) => a + (e.$1.price ?? 0) * e.$2);
     final count = items.fold<int>(0, (a, e) => a + e.$2);
-    final sellers = items.map((e) => e.$1.sellerId).toSet().length;
-    final ship = shippingFee * sellers;
+    final ship = shippingFee * items.length;
     final vat = (sub + ship) * vatRate;
     final total = sub + ship + vat;
 
@@ -102,6 +102,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('${e.$1.title} · ${e.$1.condition}', style: tx(15, w: w5)),
                   Text('البائع: ${e.$1.sellerName}', style: tx(12, c: AppColors.mute)),
+                  Text(fmtQty(e.$1.status == 'active' ? e.$1.quantity : 0), style: tx(12, c: e.$1.quantity <= 1 ? AppColors.pri : AppColors.mute)),
                   Text(fmtMoney(e.$1.price ?? 0), style: tx(16, w: w6, c: AppColors.teal)),
                 ]),
               ),
@@ -234,9 +235,13 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     });
     if (!mounted) return;
     setState(() => busy = false);
+    // تحديث فواتيري ومشترياتي فوراً
+    ref.invalidate(myOrdersProvider);
     if (ok) {
       ref.read(checkoutOrdersProvider.notifier).state = const [];
       context.pushReplacement('/invoice/${ids.first}');
+    } else {
+      setState(() => future = Api.ordersByIds(ids));
     }
   }
 
@@ -373,7 +378,7 @@ class InvoiceScreen extends ConsumerWidget {
     final ov = ref.watch(orderProvider(id));
     Widget kv(String k, String v) => Row(children: [
           Expanded(child: Text(k, style: tx(13, c: AppColors.mute))),
-          Text(v, style: tx(13, w: w5)),
+          Flexible(child: Text(v, style: tx(13, w: w5), textAlign: TextAlign.left)),
         ]);
     Widget row(String a, String q, String p, {bool head = false}) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -405,7 +410,7 @@ class InvoiceScreen extends ConsumerWidget {
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text('تم الدفع بنجاح', style: tx(16, w: w6, c: AppColors.teal)),
-                      Text('وصلت فاتورتك على الجوال، وبيبدأ المورد يجهّز الشحنة', style: tx(12, c: AppColors.ink2)),
+                      Text('انحفظت فاتورتك في «فواتيري»، وبيبدأ البائع يجهّز الشحنة', style: tx(12, c: AppColors.ink2)),
                     ]),
                   ),
                 ]),
@@ -549,6 +554,14 @@ class InvoicesScreen extends ConsumerStatefulWidget {
 
 class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
   int filter = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // دائماً بيانات حديثة عند فتح الصفحة
+    Future.microtask(() => ref.invalidate(myOrdersProvider));
+  }
+
   @override
   Widget build(BuildContext context) {
     final ov = ref.watch(myOrdersProvider);
@@ -559,7 +572,8 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
         AsyncBody<List<Order>>(ov, (all) {
           final paid = all.where((o) => o.invoiceNo != null).toList();
           final year = DateTime.now().year;
-          final yearTotal = paid.where((o) => o.paidAt?.year == year && o.status != 'cancelled').fold<num>(0, (a, o) => a + o.total);
+          final valid = paid.where((o) => o.status != 'cancelled').toList();
+          final yearTotal = valid.where((o) => o.paidAt?.year == year).fold<num>(0, (a, o) => a + o.total);
           final list = paid.where((o) => filter == 0 || (filter == 1 ? o.status != 'cancelled' : o.status == 'cancelled')).toList();
           return VCol(gap: 14, [
             ClipRRect(
@@ -570,7 +584,7 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('إجمالي مشترياتك في $year', style: tx(13, c: AppColors.white.withOpacity(0.85))),
                   Text(ltr(money(yearTotal)), style: tx(28, w: w7, c: AppColors.white, h: 1.3)),
-                  Text('${paid.length} فواتير', style: tx(13, c: AppColors.white.withOpacity(0.85))),
+                  Text('${valid.length} فواتير', style: tx(13, c: AppColors.white.withOpacity(0.85))),
                 ]),
               ),
             ),
@@ -599,7 +613,7 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
                 ]),
               ),
           ]);
-        }),
+        }, onRetry: () => ref.invalidate(myOrdersProvider)),
       ],
     );
   }

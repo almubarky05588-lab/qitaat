@@ -33,6 +33,50 @@ void pickFromSheet(BuildContext context, String title, List<String> options, Val
   );
 }
 
+/// اختيار تصنيف القطعة (12 تصنيف بأمثلة توضيحية)
+void pickCategory(BuildContext context, String? current, ValueChanged<String?> onPick) {
+  showAppSheet(
+    context,
+    Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text('تصنيف القطعة', style: tx(18, w: w6)),
+      Text('اختياري — يساعد الطلب يوصل للمختص بالضبط', style: tx(12, c: AppColors.mute)),
+      const SizedBox(height: 10),
+      ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
+        child: SingleChildScrollView(
+          child: Column(children: [
+            for (final c in Mock.categories)
+              GestureDetector(
+                onTap: () {
+                  onPick(c == current ? null : c);
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: c == current ? AppColors.pink : AppColors.bg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: c == current ? AppColors.pri : AppColors.chipB),
+                  ),
+                  child: Row(children: [
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(c, style: tx(14, w: w6, c: c == current ? AppColors.pri : AppColors.ink)),
+                        if (Mock.categoryHints[c] != null) Text(Mock.categoryHints[c]!, style: tx(12, c: AppColors.mute)),
+                      ]),
+                    ),
+                    if (c == current) const Icon(LucideIcons.check, size: 18, color: AppColors.pri),
+                  ]),
+                ),
+              ),
+          ]),
+        ),
+      ),
+    ]),
+  );
+}
+
 // ───────────────── 11 · اطلب قطعة ─────────────────
 
 class RequestPartScreen extends ConsumerStatefulWidget {
@@ -48,7 +92,7 @@ class _RequestPartScreenState extends ConsumerState<RequestPartScreen> {
   String vin = '';
   String notes = '';
   final parts = <String>[''];
-  String? cat;
+  final cats = <String?>[null];
   String condition = 'جديد أصلي';
   List<String> images = [];
   bool busy = false;
@@ -56,7 +100,12 @@ class _RequestPartScreenState extends ConsumerState<RequestPartScreen> {
   @override
   void initState() {
     super.initState();
-    Api.cars().then((cars) {
+    _loadCar();
+  }
+
+  Future<void> _loadCar() async {
+    try {
+      final cars = await Api.cars();
       if (cars.isEmpty || !mounted) return;
       final c = cars.firstWhere((e) => e.isDefault, orElse: () => cars.first);
       setState(() {
@@ -65,11 +114,17 @@ class _RequestPartScreenState extends ConsumerState<RequestPartScreen> {
         year = c.year?.toString() ?? year;
         vin = c.vin ?? '';
       });
-    }).catchError((_) {});
+    } catch (_) {}
   }
 
   Future<void> _send() async {
-    final ps = parts.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    final ps = <String>[], cs = <String>[];
+    for (var i = 0; i < parts.length; i++) {
+      final t = parts[i].trim();
+      if (t.isEmpty) continue;
+      ps.add(t);
+      cs.add(cats[i] ?? '');
+    }
     if (ps.isEmpty) {
       showToast(context, 'اكتب القطعة المطلوبة');
       return;
@@ -77,18 +132,21 @@ class _RequestPartScreenState extends ConsumerState<RequestPartScreen> {
     setState(() => busy = true);
     try {
       final city = ref.read(myProfileProvider).valueOrNull?.city;
+      final firstCat = cs.firstWhere((c) => c.isNotEmpty, orElse: () => '');
       final id = await Api.createRequest({
         'brand': brand,
         'model': model,
-        'year': int.tryParse(year),
-        'vin': vin.trim().isEmpty ? null : vin.trim(),
+        'year': int.tryParse(latinDigits(year)),
+        'vin': vin.trim().isEmpty ? null : latinDigits(vin.trim()).toUpperCase(),
         'parts': ps,
-        'category': cat,
+        'part_categories': cs,
+        'category': firstCat.isEmpty ? null : firstCat,
         'condition': condition,
         'notes': notes.trim().isEmpty ? null : notes.trim(),
         'images': images,
         'city': city,
       });
+      ref.invalidate(myRequestsProvider);
       if (mounted) context.pushReplacement('/request-sent/$id');
     } catch (e) {
       if (mounted) showToast(context, errMsg(e));
@@ -96,6 +154,41 @@ class _RequestPartScreenState extends ConsumerState<RequestPartScreen> {
       if (mounted) setState(() => busy = false);
     }
   }
+
+  Widget _partRow(int i) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: AppField(key: ValueKey('p$i'), hint: i == 0 ? 'مثال: صدام أمامي' : 'مثال: فحمات أمامية', value: parts[i].isEmpty ? null : parts[i], onChanged: (v) => parts[i] = v)),
+          if (parts.length > 1) ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => setState(() {
+                parts.removeAt(i);
+                cats.removeAt(i);
+              }),
+              child: const Icon(LucideIcons.x, size: 20, color: AppColors.mute),
+            ),
+          ],
+        ]),
+        const SizedBox(height: 6),
+        GestureDetector(
+          onTap: () => pickCategory(context, cats[i], (c) => setState(() => cats[i] = c)),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: cats[i] != null ? AppColors.sage : AppColors.white,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: cats[i] != null ? AppColors.sageB : AppColors.chipB),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(LucideIcons.shapes, size: 14, color: cats[i] != null ? AppColors.teal : AppColors.mute),
+              const SizedBox(width: 6),
+              Flexible(child: Text(cats[i] ?? 'التصنيف (اختياري)', style: tx(12, w: w5, c: cats[i] != null ? AppColors.teal : AppColors.mute), overflow: TextOverflow.ellipsis)),
+              const SizedBox(width: 4),
+              Icon(LucideIcons.chevronDown, size: 14, color: cats[i] != null ? AppColors.teal : AppColors.mute),
+            ]),
+          ),
+        ),
+      ]);
 
   @override
   Widget build(BuildContext context) {
@@ -120,10 +213,13 @@ class _RequestPartScreenState extends ConsumerState<RequestPartScreen> {
         LabeledField('رقم الهيكل / VIN (اختياري)', AppField(key: ValueKey('v$vin'), hint: 'مثال: JTDKB20U...', value: vin.isEmpty ? null : vin, ltrText: true, onChanged: (v) => vin = v)),
         LabeledField(
           'القطع المطلوبة',
-          VCol(gap: 10, [
-            for (var i = 0; i < parts.length; i++) AppField(key: ValueKey('p$i'), hint: 'مثال: صدام أمامي', value: parts[i].isEmpty ? null : parts[i], onChanged: (v) => parts[i] = v),
+          VCol(gap: 14, [
+            for (var i = 0; i < parts.length; i++) _partRow(i),
             GestureDetector(
-              onTap: () => setState(() => parts.add('')),
+              onTap: () => setState(() {
+                parts.add('');
+                cats.add(null);
+              }),
               child: Row(children: [
                 const Icon(LucideIcons.plus, size: 18, color: AppColors.teal),
                 const SizedBox(width: 6),
@@ -131,8 +227,8 @@ class _RequestPartScreenState extends ConsumerState<RequestPartScreen> {
               ]),
             ),
           ]),
+          help: 'لكل قطعة تصنيفها — مثال: صدام (البودي) وفحمات (الفرامل)',
         ),
-        LabeledField('تصنيف القطعة (اختياري)', ChipWrap(Mock.categories, selected: {if (cat != null) cat!}, onTap: (c) => setState(() => cat = cat == c ? null : c))),
         LabeledField('حالة القطعة (أصلية / مستعملة)', SelectGrid(options: Mock.conditions, selected: condition, onChanged: (v) => setState(() => condition = v)), required: true),
         LabeledField('صور (اختياري)', PhotoStrip(urls: images, size: 120, max: 4, onChanged: (v) => setState(() => images = v)), help: 'صورة القطعة أو العطل تساعد الموردين يجاوبونك أدق'),
         LabeledField('ملاحظات (اختياري)', AppField(hint: 'أي تفاصيل إضافية...', area: true, onChanged: (v) => notes = v)),
@@ -176,50 +272,58 @@ class RequestSentScreen extends ConsumerWidget {
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Column(children: [
-                const SizedBox(height: 20),
-                Container(
-                  width: 140,
-                  height: 140,
-                  decoration: const BoxDecoration(color: AppColors.pink, shape: BoxShape.circle),
-                  alignment: Alignment.center,
-                  child: Container(
-                    width: 96,
-                    height: 96,
-                    decoration: const BoxDecoration(color: AppColors.pri, shape: BoxShape.circle),
-                    child: const Icon(LucideIcons.send, size: 44, color: AppColors.white),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text('طلبك انتشر!', style: tx(28, w: w7)),
-                const SizedBox(height: 14),
-                Text('أرسلنا طلبك لكل الموردين المتخصصين في ${r?.brand ?? 'ماركتك'}. أول العروض توصلك عادةً خلال ساعتين، وبنعلمك بإشعار.',
-                    textAlign: TextAlign.center, style: tx(15, c: AppColors.mute, h: 1.7)),
-                const SizedBox(height: 14),
-                if (r != null)
-                  FutureBuilder<int>(
-                    future: Api.matchingSuppliers(r.brand),
-                    builder: (c, s) => Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(999)),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(LucideIcons.users, size: 18, color: AppColors.teal),
-                        const SizedBox(width: 8),
-                        Text(s.hasData ? 'وصل لـ ${s.data} مورد متخصص' : 'جاري الإرسال للموردين...', style: tx(14, w: w6, c: AppColors.teal)),
-                      ]),
+              child: FutureBuilder<int>(
+                future: r == null ? null : Api.matchingSuppliers(r.brand),
+                builder: (c, s) {
+                  final none = s.hasData && s.data == 0;
+                  return Column(children: [
+                    const SizedBox(height: 20),
+                    Container(
+                      width: 140,
+                      height: 140,
+                      decoration: BoxDecoration(color: none ? AppColors.beige : AppColors.pink, shape: BoxShape.circle),
+                      alignment: Alignment.center,
+                      child: Container(
+                        width: 96,
+                        height: 96,
+                        decoration: BoxDecoration(color: none ? AppColors.thumbIcon : AppColors.pri, shape: BoxShape.circle),
+                        child: Icon(none ? LucideIcons.clock : LucideIcons.send, size: 44, color: AppColors.white),
+                      ),
                     ),
-                  ),
-                const SizedBox(height: 20),
-                if (r != null)
-                  AppCard(
-                    child: VCol(gap: 8, [
-                      KV('القطعة', r.partsLabel),
-                      KV('السيارة', r.car),
-                      KV('الحالة المطلوبة', r.condition),
-                      const KV('مدة استقبال العروض', '48 ساعة'),
-                    ]),
-                  ),
-              ]),
+                    const SizedBox(height: 18),
+                    Text(none ? 'انحفظ طلبك' : 'طلبك انتشر!', style: tx(28, w: w7)),
+                    const SizedBox(height: 14),
+                    Text(
+                        none
+                            ? 'ما فيه حالياً موردين متخصصين في ${r?.brand ?? ''}. طلبك محفوظ ويوصل تلقائياً لأي مورد متخصص ينضم خلال مدة الطلب.'
+                            : 'أرسلنا طلبك للموردين المتخصصين في ${r?.brand ?? 'ماركتك'}. أول العروض توصلك عادةً خلال ساعتين، وبنعلمك بإشعار.',
+                        textAlign: TextAlign.center,
+                        style: tx(15, c: AppColors.mute, h: 1.7)),
+                    const SizedBox(height: 14),
+                    if (r != null && !none)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(999)),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          const Icon(LucideIcons.users, size: 18, color: AppColors.teal),
+                          const SizedBox(width: 8),
+                          Text(s.hasData ? 'وصل لـ ${s.data} مورد متخصص' : 'جاري الإرسال للموردين...', style: tx(14, w: w6, c: AppColors.teal)),
+                        ]),
+                      ),
+                    const SizedBox(height: 20),
+                    if (r != null)
+                      AppCard(
+                        child: VCol(gap: 8, [
+                          KV('القطعة', r.partsLabel),
+                          if (r.categoriesLabel.isNotEmpty) KV('التصنيف', r.categoriesLabel),
+                          KV('السيارة', r.car),
+                          KV('الحالة المطلوبة', r.condition),
+                          KV('مدة استقبال العروض', fmtLeft(r.expiresAt)),
+                        ]),
+                      ),
+                  ]);
+                },
+              ),
             ),
           ),
           Padding(
@@ -235,7 +339,7 @@ class RequestSentScreen extends ConsumerWidget {
   }
 }
 
-// ───────────────── 12 · طلبات القطع ─────────────────
+// ───────────────── 12 · طلبات القطع (طلباتي كمشتري) ─────────────────
 
 final myRequestsProvider = FutureProvider<List<PartRequest>>((ref) {
   ref.watch(authProvider);
@@ -243,7 +347,8 @@ final myRequestsProvider = FutureProvider<List<PartRequest>>((ref) {
 });
 
 class MyRequestsScreen extends ConsumerWidget {
-  const MyRequestsScreen({super.key});
+  final bool withBack;
+  const MyRequestsScreen({super.key, this.withBack = false});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final v = ref.watch(myRequestsProvider);
@@ -253,13 +358,16 @@ class MyRequestsScreen extends ConsumerWidget {
         color: AppColors.pri,
         onRefresh: () async => ref.invalidate(myRequestsProvider),
         child: ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 28), children: [
-          Text('طلبات القطع', style: tx(24, w: w6)),
+          Row(children: [
+            if (withBack) GestureDetector(onTap: () => context.pop(), child: const Padding(padding: EdgeInsetsDirectional.only(end: 10), child: Icon(LucideIcons.arrowRight, size: 24))),
+            Expanded(child: Text(withBack ? 'طلباتي كمشتري' : 'طلبات القطع', style: tx(24, w: w6))),
+          ]),
           const SizedBox(height: 16),
           AsyncBody<List<PartRequest>>(
             v,
             (list) => list.isEmpty
-                ? EmptyBox(LucideIcons.archive, 'ما عندك طلبات قطع للحين',
-                    action: AppButton('اطلب قطعتك الآن', icon: LucideIcons.search, expand: false, radius: 999, height: 46, fs: 15, onTap: () => context.push('/request-part')))
+                ? EmptyBox(LucideIcons.archive, 'ما عندك طلبات حتى الآن',
+                    action: AppButton('اطلب قطعة', icon: LucideIcons.search, expand: false, radius: 999, height: 46, fs: 15, onTap: () => context.push('/request-part')))
                 : VCol(gap: 14, [for (final r in list) _RequestCard(r)]),
             onRetry: () => ref.invalidate(myRequestsProvider),
           ),
@@ -285,6 +393,7 @@ class _RequestCard extends ConsumerWidget {
     } else {
       badges.addAll([const StatusBadge.grey('انتهى بدون شراء'), StatusBadge('${offers.length} عرض')]);
     }
+    final sub = [if (r.categoriesLabel.isNotEmpty) 'تصنيف: ${r.categoriesLabel}', if (r.notes != null) r.notes!].join(' · ');
     return AppCard(
       onTap: () => context.push('/offers/${r.id}'),
       child: VCol(gap: 12, [
@@ -292,16 +401,15 @@ class _RequestCard extends ConsumerWidget {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(r.title, style: tx(16, w: w5)),
-              if (r.category != null || r.notes != null) Text([if (r.category != null) 'تصنيف: ${r.category}', if (r.notes != null) r.notes!].join(' · '), style: tx(14, c: AppColors.ink2)),
+              if (sub.isNotEmpty) Text(sub, style: tx(13, c: AppColors.ink2)),
             ]),
           ),
           const SizedBox(width: 10),
           const Icon(LucideIcons.chevronLeft, size: 20, color: AppColors.mute),
         ]),
         if (r.images.isNotEmpty) Align(alignment: AlignmentDirectional.centerStart, child: PartThumb(width: 96, height: 96, radius: 14, imageUrl: r.images.first)),
-        Row(children: [
-          ...badges.expand((b) => [b, const SizedBox(width: 8)]),
-          const Spacer(),
+        Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          ...badges,
           if (r.bestPrice != null) Text('الأفضل: ${fmtMoney(r.bestPrice!)}', style: tx(15, w: w6, c: AppColors.teal)),
         ]),
         if (r.isOpen)
@@ -343,6 +451,7 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('طلبك', style: tx(13, c: AppColors.mute)),
             Text(r.title, style: tx(16, w: w5)),
+            if (r.categoriesLabel.isNotEmpty) Text('التصنيف: ${r.categoriesLabel}', style: tx(12, c: AppColors.ink2)),
           ]),
         );
 
@@ -446,28 +555,31 @@ class _OfferCard extends ConsumerWidget {
       border: best ? AppColors.pri : null,
       child: VCol(gap: 12, [
         if (best) const Align(alignment: AlignmentDirectional.centerStart, child: StatusBadge('الأفضل سعراً', icon: LucideIcons.star)),
-        Row(children: [
-          const Avatar(size: 46),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Flexible(child: Text(s?.displayName ?? 'مورد', style: tx(16, w: w6))),
-                if (s?.verified == true) const SizedBox(width: 6),
-                if (s?.verified == true) const VerifiedBadge(size: 18),
+        GestureDetector(
+          onTap: s == null ? null : () => context.push('/store/${s.id}'),
+          child: Row(children: [
+            const Avatar(size: 46),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Flexible(child: Text(s?.displayName ?? 'مورد', style: tx(16, w: w6))),
+                  if (s?.verified == true) const SizedBox(width: 6),
+                  if (s?.verified == true) const VerifiedBadge(size: 18),
+                ]),
+                Row(children: [
+                  const Icon(LucideIcons.mapPin, size: 14, color: AppColors.mute),
+                  const SizedBox(width: 4),
+                  Text(s?.city ?? '', style: tx(12, c: AppColors.mute)),
+                ]),
               ]),
-              Row(children: [
-                const Icon(LucideIcons.mapPin, size: 14, color: AppColors.mute),
-                const SizedBox(width: 4),
-                Text(s?.city ?? '', style: tx(12, c: AppColors.mute)),
-              ]),
+            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text(fmtMoney(o.price), style: tx(20, w: w7, c: AppColors.teal, h: 1.3)),
+              Text(o.includesShipping ? 'شامل الشحن' : 'غير شامل الشحن', style: tx(11, c: AppColors.mute)),
             ]),
-          ),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(fmtMoney(o.price), style: tx(20, w: w7, c: AppColors.teal, h: 1.3)),
-            Text(o.includesShipping ? 'شامل الشحن' : 'غير شامل الشحن', style: tx(11, c: AppColors.mute)),
           ]),
-        ]),
+        ),
         Wrap(spacing: 6, runSpacing: 6, children: [
           AppChip('الحالة: ${o.condition}', selected: true, teal: true, fs: 12, px: 10, py: 5),
           if (o.warranty != null) AppChip('ضمان ${o.warranty}', bg: const Color(0xFFF3ECE2), noBorder: true, fs: 12, px: 10, py: 5),

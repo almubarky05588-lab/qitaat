@@ -7,6 +7,7 @@ import '../features/catalog.dart';
 import '../features/checkout.dart';
 import '../features/home.dart';
 import '../features/merchant.dart';
+import '../features/merchant_plus.dart';
 import '../features/orders.dart';
 import '../features/requests.dart';
 import '../features/shell.dart';
@@ -59,16 +60,18 @@ final appRouter = GoRouter(
     _r('/settings', (s) => const SettingsScreen()),
     _r('/edit-profile', (s) => const EditProfileScreen()),
 
+    // البيع (أي مستخدم) — إعلان جديد يتطلب حساب بنكي لاستلام المبلغ
+    _r('/sell', (s) => s.uri.queryParameters['edit'] != null ? SellPartScreen(editId: s.uri.queryParameters['edit']) : const SellGate()),
+
     // التاجر / المورد
-    _r('/sell', (s) => SellPartScreen(editId: s.uri.queryParameters['edit'])),
     _r('/m/dashboard', (s) => const DashboardScreen()),
-    _r('/m/requests', (s) => const CustomerRequestsScreen()),
+    _r('/m/requests', (s) => const CustomerRequestsPage()),
     _r('/m/offer/:id', (s) => SubmitOfferScreen(id: s.pathParameters['id']!)),
-    _r('/m/listings', (s) => const MyListingsScreen()),
+    _r('/m/listings', (s) => const ListingsManagerScreen()),
     _r('/m/bids', (s) => const ListingBidsScreen()),
     _r('/m/sales', (s) => const SalesOrdersScreen()),
     _r('/m/document/:id', (s) => DocumentPhotosScreen(id: s.pathParameters['id']!)),
     _r('/m/earnings', (s) => const EarningsScreen()),
-    _r('/m/subscription', (s) => const SubscriptionScreen()),
+    _r('/m/subscription', (s) => const PlansScreen()),
   ],
 );

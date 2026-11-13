@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -28,16 +30,38 @@ String fmtTime(DateTime d) {
   return '$h:${d.minute.toString().padLeft(2, '0')} ${d.hour < 12 ? 'ص' : 'م'}';
 }
 
+/// تحويل الأرقام العربية/الفارسية إلى إنجليزية
+String latinDigits(String s) {
+  const ar = '٠١٢٣٤٥٦٧٨٩', fa = '۰۱۲۳۴۵۶۷۸۹';
+  final b = StringBuffer();
+  for (final ch in s.split('')) {
+    final i = ar.indexOf(ch), j = fa.indexOf(ch);
+    b.write(i >= 0 ? '$i' : (j >= 0 ? '$j' : ch));
+  }
+  return b.toString();
+}
+
+/// صيغة عربية للعدد مع المعدود (دقيقة/ساعة/يوم)
+String _plural(int n, String one, String two, String few, String many) {
+  if (n == 1) return one;
+  if (n == 2) return two;
+  if (n >= 3 && n <= 10) return '$n $few';
+  return '$n $many';
+}
+
+/// عمر الإعلان: الآن ← دقائق ← ساعات ← أيام (حتى 7) ← التاريخ
 String fmtAgo(DateTime? d) {
   if (d == null) return '';
   final s = DateTime.now().difference(d);
   if (s.inMinutes < 1) return 'الآن';
-  if (s.inMinutes < 60) return 'قبل ${s.inMinutes} د';
-  if (s.inHours < 2) return 'قبل ساعة';
-  if (s.inHours < 24) return 'قبل ${s.inHours} ساعات';
-  if (s.inDays < 2) return 'أمس';
+  if (s.inHours < 1) return 'قبل ${_plural(s.inMinutes, 'دقيقة', 'دقيقتين', 'دقائق', 'دقيقة')}';
+  if (s.inDays < 1) return 'قبل ${_plural(s.inHours, 'ساعة', 'ساعتين', 'ساعات', 'ساعة')}';
+  if (s.inDays <= 7) return 'قبل ${_plural(s.inDays, 'يوم', 'يومين', 'أيام', 'يوم')}';
   return fmtDate(d);
 }
+
+/// الكمية المتوفرة نصياً
+String fmtQty(int q) => q <= 0 ? 'نفدت الكمية' : (q == 1 ? 'متبقي حبة واحدة' : (q == 2 ? 'المتوفر: قطعتين' : 'المتوفر: $q ${q <= 10 ? 'قطع' : 'قطعة'}'));
 
 String fmtLeft(DateTime? d) {
   if (d == null) return '';
@@ -46,6 +70,17 @@ String fmtLeft(DateTime? d) {
   if (s.inHours >= 48) return 'باقي ${s.inDays} يوم';
   if (s.inHours >= 1) return 'باقي ${s.inHours} ساعة';
   return 'باقي ${s.inMinutes} دقيقة';
+}
+
+/// الآيبان السعودي: SA + 22 رقم (24 خانة) — يرجع الصيغة الموحّدة أو رسالة الخطأ
+(String?, String?) checkIban(String raw) {
+  final v = latinDigits(raw).replaceAll(RegExp(r'[\s\-]'), '').toUpperCase();
+  if (v.isEmpty) return (null, null);
+  if (!v.startsWith('SA')) return (null, 'الآيبان السعودي يبدأ بـ SA');
+  final digits = v.substring(2);
+  if (!RegExp(r'^\d+$').hasMatch(digits)) return (null, 'بعد SA لازم تكون أرقام فقط');
+  if (digits.length != 22) return (null, 'الآيبان ناقص أو زايد: كتبت ${digits.length} رقم بعد SA والمطلوب 22 (المجموع 24 خانة)');
+  return (v, null);
 }
 
 String errMsg(Object e) {
@@ -64,7 +99,7 @@ String errMsg(Object e) {
 
 class Profile {
   final String id;
-  final String? phone, name, city, bio, avatarUrl, storeCr, storeVat, storeLocation, crDocUrl, verifyNote;
+  final String? phone, name, city, bio, avatarUrl, coverUrl, storeCr, storeVat, storeLocation, crDocUrl, vatDocUrl, nationalAddress, verifyNote;
   final String role, plan, verifyStatus;
   final List<String> brands, categories;
   final bool receiveRequests, verified;
@@ -76,10 +111,13 @@ class Profile {
         city = j['city'],
         bio = j['bio'],
         avatarUrl = j['avatar_url'],
+        coverUrl = j['cover_url'],
         storeCr = j['store_cr'],
         storeVat = j['store_vat'],
         storeLocation = j['store_location'],
         crDocUrl = j['cr_doc_url'],
+        vatDocUrl = j['vat_doc_url'],
+        nationalAddress = j['national_address'],
         verifyNote = j['verify_note'],
         role = j['role'] ?? 'buyer',
         plan = j['plan'] ?? 'free',
@@ -92,6 +130,24 @@ class Profile {
   bool get isMerchant => role == 'merchant';
   String get displayName => (name == null || name!.isEmpty) ? 'مستخدم' : name!;
   String get initial => displayName.substring(0, 1);
+  String get planLabel => switch (plan) { 'pro' => 'لولو برو', 'pro_max' => 'لولو برو ماكس', _ => 'لولو المجانية' };
+
+  /// حسابات التواصل المعبأة فقط: (المفتاح، الاسم، الرابط)
+  List<(String, String, String)> get socialLinks {
+    String clean(String s) => s.trim().replaceFirst(RegExp(r'^@'), '');
+    final out = <(String, String, String)>[];
+    void add(String k, String label, String Function(String) url) {
+      final v = '${socials[k] ?? ''}'.trim();
+      if (v.isEmpty || v == 'null') return;
+      out.add((k, label, v.startsWith('http') ? v : url(clean(v))));
+    }
+
+    add('x', 'X', (u) => 'https://x.com/$u');
+    add('snap', 'سناب', (u) => 'https://www.snapchat.com/add/$u');
+    add('tiktok', 'تيك توك', (u) => 'https://www.tiktok.com/@$u');
+    add('insta', 'إنستقرام', (u) => 'https://www.instagram.com/$u');
+    return out;
+  }
 }
 
 class Listing {
@@ -99,7 +155,7 @@ class Listing {
   final String? brand, model, category, city, description;
   final int? yearFrom, yearTo;
   final num? price, startPrice;
-  final DateTime? auctionEndsAt, createdAt;
+  final DateTime? auctionEndsAt, createdAt, featuredUntil;
   final int quantity, views;
   final List<String> delivery, images;
   final Profile? seller;
@@ -124,6 +180,7 @@ class Listing {
         startPrice = _nn(j['start_price']),
         auctionEndsAt = _d(j['auction_ends_at']),
         createdAt = _d(j['created_at']),
+        featuredUntil = _d(j['featured_until']),
         quantity = j['quantity'] ?? 1,
         views = j['views'] ?? 0,
         featured = j['featured'] ?? false,
@@ -143,6 +200,7 @@ class Listing {
     return m;
   }
 
+  bool get boosted => featured || (featuredUntil != null && featuredUntil!.isAfter(DateTime.now()));
   bool get auction => saleType == 'auction';
   String get priceLabel => auction ? 'على السوم' : fmtMoney(price ?? 0);
   String get fits {
@@ -177,7 +235,7 @@ class PartRequest {
   final String id, buyerId, brand, condition, status;
   final String? model, vin, category, notes, city;
   final int? year;
-  final List<String> parts, images;
+  final List<String> parts, partCategories, images;
   final DateTime? expiresAt, createdAt;
   final List<Offer> offers;
   final Profile? buyer;
@@ -194,6 +252,7 @@ class PartRequest {
         city = j['city'],
         year = j['year'],
         parts = _sl(j['parts']),
+        partCategories = _sl(j['part_categories']),
         images = _sl(j['images']),
         expiresAt = _d(j['expires_at']),
         createdAt = _d(j['created_at']),
@@ -202,6 +261,13 @@ class PartRequest {
   String get partsLabel => parts.join('، ');
   String get car => [brand, model, year?.toString()].where((e) => e != null && e.isNotEmpty).join(' ');
   String get title => '$partsLabel · $car · $condition';
+
+  /// التصنيفات المختارة (بدون تكرار ولا فراغ)
+  String get categoriesLabel {
+    final s = {...partCategories.where((c) => c.isNotEmpty), if (partCategories.isEmpty && (category ?? '').isNotEmpty) category!};
+    return s.join('، ');
+  }
+
   bool get isOpen => status == 'open' && (expiresAt == null || expiresAt!.isAfter(DateTime.now()));
   List<Offer> get liveOffers => offers.where((o) => o.status != 'withdrawn').toList();
   num? get bestPrice => liveOffers.isEmpty ? null : liveOffers.map((o) => o.price).reduce((a, b) => a < b ? a : b);
@@ -361,6 +427,13 @@ class Car {
   String get title => [brand, model, year?.toString()].where((e) => e != null && e.isNotEmpty).join(' ');
 }
 
+class Payout {
+  final String? holder, bank, iban;
+  const Payout({this.holder, this.bank, this.iban});
+  bool get complete => (holder ?? '').isNotEmpty && (iban ?? '').isNotEmpty;
+  String? get masked => iban == null || iban!.length < 8 ? null : '${iban!.substring(0, 4)} •••• •••• ${iban!.substring(iban!.length - 4)}';
+}
+
 // ───────────────── الاستعلامات ─────────────────
 
 const _listingSel = '*, seller:profiles!listings_seller_id_fkey(*), bids(amount,status)';
@@ -382,7 +455,7 @@ class Api {
     return r == null ? null : Profile.fromJson(r);
   }
 
-  // الإعلانات (المميزة من لوحة الإدارة تظهر أول)
+  // الإعلانات (المميزة أولاً)
   static Future<List<Listing>> listings({String? q, String? brand, String? sellerId, String? status = 'active', int limit = 50, bool auctionOnly = false}) async {
     var f = sb.from('listings').select(_listingSel);
     if (status != null) f = f.eq('status', status);
@@ -395,8 +468,13 @@ class Api {
         f = f.or('title.ilike.%$w%,brand.ilike.%$w%,model.ilike.%$w%');
       }
     }
-    final r = await f.order('featured', ascending: false).order('created_at', ascending: false).limit(limit);
-    return r.map<Listing>((e) => Listing.fromJson(e)).toList();
+    final r = await f.order('created_at', ascending: false).limit(limit);
+    final list = r.map<Listing>((e) => Listing.fromJson(e)).toList();
+    if (sellerId == null) {
+      final boosted = list.where((l) => l.boosted).toList();
+      return [...boosted, ...list.where((l) => !l.boosted)];
+    }
+    return list;
   }
 
   static Future<Listing?> listing(String id) async {
@@ -421,6 +499,10 @@ class Api {
 
   static Future<void> updateListing(String id, Map<String, dynamic> data) => sb.from('listings').update(data).eq('id', id);
   static Future<void> deleteListing(String id) => sb.from('listings').delete().eq('id', id);
+
+  // تمييز الإعلانات
+  static Future<Map<String, dynamic>> boostQuota() async => Map<String, dynamic>.from(await sb.rpc('boost_quota'));
+  static Future<void> boostListing(String id) => sb.rpc('boost_listing', params: {'p_listing': id});
 
   // المفضلة والسلة
   static Future<Set<String>> favoriteIds() async {
@@ -496,7 +578,7 @@ class Api {
   }
 
   static Future<int> matchingSuppliers(String brand) async {
-    final r = await sb.from('profiles').select('id').eq('role', 'merchant').contains('brands', [brand]);
+    final r = await sb.from('profiles').select('id').eq('role', 'merchant').eq('receive_requests', true).contains('brands', [brand]);
     return r.length;
   }
 
@@ -512,7 +594,7 @@ class Api {
     return r == null ? null : PartRequest.fromJson(r);
   }
 
-  /// طلبات العملاء المطابقة لتخصص التاجر (الحماية في القاعدة تضمن الماركة)
+  /// طلبات العملاء المطابقة لتخصص التاجر (الحماية في القاعدة تضمن الماركة والتصنيف)
   static Future<List<PartRequest>> customerRequests() async {
     await sb.rpc('expire_requests').catchError((_) => null);
     final r = await sb.from('part_requests').select('*, offers(*)').neq('buyer_id', myId!).order('created_at', ascending: false).limit(100);
@@ -588,15 +670,24 @@ class Api {
   // الحساب
   static Future<void> updateProfile(Map<String, dynamic> data) => sb.from('profiles').update(data).eq('id', myId!);
 
-  /// طلب توثيق المتجر: رفع صورة السجل التجاري وإرسالها لمراجعة الإدارة
-  static Future<void> requestVerification(String docUrl) => updateProfile({'cr_doc_url': docUrl, 'verify_status': 'pending'});
+  /// طلب توثيق المتجر: السجل والشهادة الضريبية والعنوان الوطني المختصر
+  static Future<void> requestVerification({required String cr, required String crDoc, String? vat, required String vatDoc, required String address}) =>
+      sb.rpc('request_verification', params: {'p_cr': cr, 'p_cr_doc': crDoc, 'p_vat': vat, 'p_vat_doc': vatDoc, 'p_address': address});
 
-  static Future<String?> iban() async {
-    final r = await sb.from('payout_accounts').select('iban').eq('user_id', myId!).maybeSingle();
-    return r?['iban'];
+  static Future<Payout> payout() async {
+    final r = await sb.from('payout_accounts').select().eq('user_id', myId!).maybeSingle();
+    return r == null ? const Payout() : Payout(holder: r['holder_name'], bank: r['bank_name'], iban: r['iban']);
   }
 
-  static Future<void> setIban(String iban) => sb.from('payout_accounts').upsert({'user_id': myId, 'iban': iban, 'updated_at': DateTime.now().toUtc().toIso8601String()});
+  static Future<void> setPayout({String? holder, String? bank, String? iban}) => sb.from('payout_accounts').upsert({
+        'user_id': myId,
+        if (holder != null) 'holder_name': holder,
+        if (bank != null) 'bank_name': bank,
+        if (iban != null) 'iban': iban,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+
+  static Future<String?> iban() async => (await payout()).iban;
 
   static Future<List<Car>> cars() async {
     final r = await sb.from('cars').select().eq('user_id', myId!).order('created_at');
@@ -616,6 +707,11 @@ class Api {
 
   static Future<Map<String, dynamic>> merchantStats(int days) async => Map<String, dynamic>.from(await sb.rpc('merchant_stats', params: {'p_days': days}));
 
+  static Future<Map<String, dynamic>> settings() async {
+    final r = await sb.from('app_settings').select('key,value');
+    return {for (final e in r) '${e['key']}': e['value']};
+  }
+
   static Future<int> followersCount(String storeId) async => (await sb.from('follows').select('follower_id').eq('store_id', storeId)).length;
   static Future<int> followingCount() async => (await sb.from('follows').select('store_id').eq('follower_id', myId!)).length;
   static Future<bool> isFollowing(String storeId) async =>
@@ -628,18 +724,30 @@ class Api {
       List<Map<String, dynamic>>.from(await sb.from('comments').select('*, user:profiles(name)').eq('listing_id', listingId).order('created_at'));
   static Future<void> addComment(String listingId, String body) => sb.from('comments').insert({'listing_id': listingId, 'user_id': myId, 'body': body});
 
-  // الصور
+  // الصور والمستندات
   static Future<XFile?> pickImage({bool camera = false}) =>
-      ImagePicker().pickImage(source: camera ? ImageSource.camera : ImageSource.gallery, imageQuality: 75, maxWidth: 1600);
+      ImagePicker().pickImage(source: camera ? ImageSource.camera : ImageSource.gallery, imageQuality: 80, maxWidth: 1800);
 
   static Future<String> uploadImage(XFile f) async {
     final bytes = await f.readAsBytes();
     var ext = f.name.contains('.') ? f.name.split('.').last.toLowerCase() : 'jpg';
-    if (!['jpg', 'jpeg', 'png', 'heic', 'webp'].contains(ext)) ext = 'jpg';
+    if (!['jpg', 'jpeg', 'png', 'webp'].contains(ext)) ext = 'jpg';
     final path = '$myId/${DateTime.now().microsecondsSinceEpoch}.$ext';
     await sb.storage.from('media').uploadBinary(path, bytes, fileOptions: FileOptions(contentType: ext == 'png' ? 'image/png' : 'image/jpeg', upsert: true));
     return sb.storage.from('media').getPublicUrl(path);
   }
+
+  /// رفع مستند خاص (PDF أو صورة) — يرجع المسار داخل التخزين الخاص
+  static Future<String> uploadDoc(Uint8List bytes, String fileName) async {
+    var ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : 'pdf';
+    if (!['pdf', 'jpg', 'jpeg', 'png'].contains(ext)) ext = 'pdf';
+    final path = '$myId/${DateTime.now().microsecondsSinceEpoch}.$ext';
+    await sb.storage.from('docs').uploadBinary(path, bytes,
+        fileOptions: FileOptions(contentType: ext == 'pdf' ? 'application/pdf' : (ext == 'png' ? 'image/png' : 'image/jpeg'), upsert: true));
+    return path;
+  }
+
+  static Future<String> docUrl(String path) => sb.storage.from('docs').createSignedUrl(path, 600);
 }
 
 // ───────────────── مزوّدات الحالة ─────────────────

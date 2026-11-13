@@ -69,7 +69,7 @@ class HomeScreen extends ConsumerWidget {
             child: Row(children: [
               const AppLogo(size: 50),
               const SizedBox(width: 14),
-              Expanded(child: Text('قطعة سيارتك', style: tx(24, w: w7, c: AppColors.pri))),
+              Expanded(child: Text('قطعة سيارتك', style: tx(24, w: w7, c: AppColors.pri), maxLines: 1, overflow: TextOverflow.ellipsis)),
               HeaderIcon(LucideIcons.shoppingCart, size: 26, color: AppColors.ink2, onTap: () => context.push('/cart')),
               const SizedBox(width: 14),
               HeaderIcon(LucideIcons.messageSquare, size: 26, color: AppColors.ink2, onTap: () => context.push('/chats')),
@@ -103,7 +103,7 @@ class HomeScreen extends ConsumerWidget {
               VCol(gap: 10, cross: CrossAxisAlignment.start, [
                 Text('وش عندي الآن؟', style: tx(17, w: w6)),
                 GestureDetector(
-                  onTap: () => context.push(merchant ? '/m/sales' : '/requests'),
+                  onTap: () => merchant ? context.push('/m/sales') : context.go('/requests'),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                     decoration: BoxDecoration(color: AppColors.sage, borderRadius: BorderRadius.circular(999), border: Border.all(color: AppColors.sageB)),
@@ -146,14 +146,14 @@ class HomeScreen extends ConsumerWidget {
                       Expanded(child: Text('طلبك الحالي', style: tx(15, w: w5))),
                       GestureDetector(onTap: () => context.go('/orders'), child: Text('كل مشترياتي ←', style: tx(13, w: w5, c: AppColors.pri))),
                     ]),
-                    Row(children: [
-                      Expanded(child: Text(current.title, style: tx(18, w: w6))),
+                    Wrap(spacing: 10, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                      Text(current.title, style: tx(18, w: w6)),
                       StatusBadge(_statusLabel(current)),
                     ]),
                     Row(children: [
-                      Expanded(child: AppButton('تفاصيل الطلب', v: BtnV.out2, radius: 999, height: 48, fs: 15, onTap: () => context.push('/order/${current.id}'))),
+                      Expanded(child: AppButton('التفاصيل', v: BtnV.out2, radius: 999, height: 48, fs: 14, onTap: () => context.push('/order/${current.id}'))),
                       const SizedBox(width: 10),
-                      Expanded(child: AppButton('تتبّع الشحنة', icon: LucideIcons.truck, v: BtnV.out2, radius: 999, height: 48, fs: 15, onTap: () => context.push('/order/${current.id}'))),
+                      Expanded(child: AppButton('تتبّع الشحنة', icon: LucideIcons.truck, v: BtnV.out2, radius: 999, height: 48, fs: 14, onTap: () => context.push('/order/${current.id}'))),
                     ]),
                   ]),
                 ),

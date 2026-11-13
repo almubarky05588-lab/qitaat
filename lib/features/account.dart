@@ -1,7 +1,9 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/media.dart';
 import '../core/product_widgets.dart';
@@ -11,6 +13,7 @@ import '../data/api.dart';
 import '../data/mock.dart';
 import 'checkout.dart' show myOrdersProvider;
 import 'requests.dart' show pickFromSheet;
+import 'store.dart' show ProfileCover, BioAndSocials, ExpandableChips;
 
 final myListingsProvider = FutureProvider<List<Listing>>((ref) {
   ref.watch(authProvider);
@@ -23,10 +26,23 @@ final accountStatsProvider = FutureProvider<(int, int)>((ref) async {
   return (await Api.followersCount(myId!), await Api.followingCount());
 });
 
+final payoutProvider = FutureProvider<Payout>((ref) {
+  ref.watch(authProvider);
+  return Api.payout();
+});
+
 Future<void> logout(BuildContext context, WidgetRef ref) async {
   await Api.signOut();
   ref.invalidate(myProfileProvider);
   if (context.mounted) context.go('/signup');
+}
+
+/// تغيير صورة العرض أو الغلاف وحفظها مباشرة (مع رسالة خطأ واضحة لو فشل الرفع)
+Future<void> changeProfileImage(BuildContext context, WidgetRef ref, {required bool cover}) async {
+  final u = await pickAndUpload(context);
+  if (u == null || !context.mounted) return;
+  final ok = await run(context, () => Api.updateProfile({cover ? 'cover_url' : 'avatar_url': u}), success: cover ? 'تم تغيير الغلاف' : 'تم تغيير صورة العرض');
+  if (ok) ref.invalidate(myProfileProvider);
 }
 
 // ───────────────── حسابي (مشتري 20 / تاجر T01) ─────────────────
@@ -43,28 +59,6 @@ class AccountScreen extends ConsumerWidget {
     final favs = ref.watch(favoriteIdsProvider).valueOrNull ?? {};
     final stats = ref.watch(accountStatsProvider).valueOrNull ?? (0, 0);
     final orders = ref.watch(myOrdersProvider).valueOrNull ?? const <Order>[];
-
-    Widget cover(IconData icon, Color avatarBg, Color iconColor) => SizedBox(
-          height: 262,
-          child: Stack(clipBehavior: Clip.none, children: [
-            Container(height: 180, decoration: const BoxDecoration(gradient: AppColors.gradient)),
-            const Positioned(top: 169, left: 0, right: 0, child: SaduPattern(color: AppColors.bg, height: 12)),
-            Positioned(
-              top: 124,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  width: 140,
-                  height: 140,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(color: avatarBg, shape: BoxShape.circle, border: Border.all(color: AppColors.bg, width: 6)),
-                  child: p.avatarUrl != null ? Image.network(p.avatarUrl!, fit: BoxFit.cover) : Icon(icon, size: 56, color: iconColor),
-                ),
-              ),
-            ),
-          ]),
-        );
 
     Widget statsCard(List<List<String>> items, {Widget? middleTop}) {
       final kids = <Widget>[];
@@ -89,7 +83,7 @@ class AccountScreen extends ConsumerWidget {
               child: Column(children: [
                 Icon(ic, size: 26, color: AppColors.pri),
                 const SizedBox(height: 8),
-                Text(t, style: tx(12, w: w5, c: AppColors.ink2), textAlign: TextAlign.center, maxLines: 1),
+                Text(t, style: tx(12, w: w5, c: AppColors.ink2), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
               ]),
             ),
           ),
@@ -104,17 +98,20 @@ class AccountScreen extends ConsumerWidget {
 
     Future<void> refresh() async => refreshAll(ref, [myProfileProvider, accountStatsProvider, myListingsProvider, myOrdersProvider]);
 
+    final cover = ProfileCover(p, onCover: () => changeProfileImage(context, ref, cover: true), onAvatar: () => changeProfileImage(context, ref, cover: false));
+
     if (!merchant) {
       return RefreshIndicator(
         color: AppColors.pri,
         onRefresh: refresh,
         child: ListView(padding: EdgeInsets.zero, children: [
-          cover(LucideIcons.user, AppColors.tealBg, AppColors.teal),
+          cover,
           Center(child: Text(p.displayName, style: tx(24, w: w6))),
           const SizedBox(height: 8),
           const Center(child: StatusBadge('مشتري')),
           const SizedBox(height: 8),
           if (p.city != null) Center(child: MetaItem(LucideIcons.mapPin, p.city!)),
+          BioAndSocials(p),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
             child: VCol(gap: 16, [
@@ -133,6 +130,7 @@ class AccountScreen extends ConsumerWidget {
                 MenuEntry(LucideIcons.shoppingBag, 'مشترياتي', onTap: () => context.go('/orders')),
                 MenuEntry(LucideIcons.archive, 'طلبات القطع', onTap: () => context.go('/requests')),
                 MenuEntry(LucideIcons.shoppingCart, 'السلة', onTap: () => context.push('/cart')),
+                MenuEntry(LucideIcons.tag, 'قطع عرضتها للبيع', onTap: () => context.push('/m/listings')),
               ]),
               MenuGroup(title: 'عام', items: [
                 MenuEntry(LucideIcons.messageSquare, 'المحادثات', onTap: () => context.push('/chats')),
@@ -182,16 +180,17 @@ class AccountScreen extends ConsumerWidget {
       color: AppColors.pri,
       onRefresh: refresh,
       child: ListView(padding: EdgeInsets.zero, children: [
-        cover(LucideIcons.store, AppColors.beige, AppColors.thumbIcon),
+        cover,
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(p.displayName, style: tx(24, w: w6)),
+          Flexible(child: Text(p.displayName, style: tx(24, w: w6), textAlign: TextAlign.center)),
           if (p.verified) const SizedBox(width: 8),
           if (p.verified) const VerifiedBadge(size: 24),
         ]),
         const SizedBox(height: 8),
-        const Center(child: StatusBadge.teal('تاجر / مورد')),
+        Center(child: Wrap(spacing: 6, children: [const StatusBadge.teal('تاجر / مورد'), StatusBadge(p.planLabel, icon: LucideIcons.award)])),
         const SizedBox(height: 8),
         if (p.city != null) Center(child: MetaItem(LucideIcons.mapPin, p.city!)),
+        BioAndSocials(p),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
           child: VCol(gap: 16, [
@@ -213,20 +212,20 @@ class AccountScreen extends ConsumerWidget {
                 child: InfoBox(p.verifyStatus == 'pending'
                     ? 'طلب توثيق متجرك قيد المراجعة'
                     : p.verifyStatus == 'rejected'
-                        ? 'طلب التوثيق مرفوض${p.verifyNote != null ? ' — ${p.verifyNote}' : ''}. أعد رفع السجل التجاري من تعديل الملف'
-                        : 'وثّق متجرك برفع صورة السجل التجاري من تعديل الملف — يظهر لك شارة «تاجر موثّق»'),
+                        ? 'طلب التوثيق مرفوض${p.verifyNote != null ? ' — ${p.verifyNote}' : ''}. عدّل المستندات وأعد الإرسال من تعديل الملف'
+                        : 'وثّق متجرك من تعديل الملف (السجل التجاري، الشهادة الضريبية، العنوان الوطني) وتظهر لك شارة «تاجر موثّق»'),
               ),
             VCol(gap: 10, cross: CrossAxisAlignment.start, [
               Text('تخصص المحل', style: tx(14, w: w5)),
               p.brands.isEmpty
                   ? GestureDetector(onTap: () => context.push('/edit-profile'), child: Text('حدّد الماركات عشان توصلك الطلبات ←', style: tx(13, w: w5, c: AppColors.pri)))
-                  : Wrap(spacing: 8, runSpacing: 8, children: [for (final b in p.brands) AppChip(b, bg: const Color(0xFFEBE1D3), noBorder: true, py: 7)]),
+                  : ExpandableChips(p.brands),
             ]),
             quickRow([
               quick(LucideIcons.pencil, 'تعديل الملف', () => context.push('/edit-profile')),
               quick(LucideIcons.car, 'سياراتي', () => context.push('/cars')),
               quick(LucideIcons.fileText, 'فواتيري', () => context.push('/invoices')),
-              quick(LucideIcons.users, 'أتابعهم', () => context.push('/favorites')),
+              quick(LucideIcons.store, 'متجري', () => context.push('/store/${p.id}')),
               quick(LucideIcons.heart, 'المفضلة', () => context.push('/favorites')),
             ]),
             Container(
@@ -235,13 +234,14 @@ class AccountScreen extends ConsumerWidget {
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 MenuGroup(title: 'تسوّقي', items: [
                   MenuEntry(LucideIcons.shoppingBag, 'مشترياتي', onTap: () => context.go('/orders')),
+                  MenuEntry(LucideIcons.archive, 'طلباتي كمشتري', onTap: () => context.push('/my-requests')),
                   MenuEntry(LucideIcons.gavel, 'مساوماتي', onTap: () => context.push('/m/bids')),
                 ]),
                 MenuGroup(title: 'متجري', items: [
                   MenuEntry(LucideIcons.layoutDashboard, 'لوحة المتجر', sub: 'الأرباح · النشاط · المخزون', onTap: () => context.push('/m/dashboard')),
-                  MenuEntry(LucideIcons.inbox, 'طلبات العملاء وعروضي', onTap: () => context.push('/m/requests')),
+                  MenuEntry(LucideIcons.inbox, 'طلبات العملاء وعروضي', onTap: () => context.go('/requests')),
                   MenuEntry(LucideIcons.tag, 'طلبات البيع', onTap: () => context.push('/m/sales')),
-                  MenuEntry(LucideIcons.award, 'باقة لولو (الاشتراك)', onTap: () => context.push('/m/subscription')),
+                  MenuEntry(LucideIcons.award, 'باقة لولو (الاشتراك)', sub: p.planLabel, onTap: () => context.push('/m/subscription')),
                 ]),
                 MenuGroup(title: 'عام', items: [
                   MenuEntry(LucideIcons.messageSquare, 'المحادثات', onTap: () => context.push('/chats')),
@@ -252,7 +252,7 @@ class AccountScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             Text('إعلاناتي', style: tx(20, w: w6)),
-            AppButton('إدارة إعلاناتي (بحث، فلترة، تعديل)', icon: LucideIcons.archive, iconFirst: true, v: BtnV.out2, radius: 999, height: 48, fs: 14, onTap: () => context.push('/m/listings')),
+            AppButton('إدارة إعلاناتي (بحث، فلترة، تعديل، تمييز)', icon: LucideIcons.archive, iconFirst: true, v: BtnV.out2, radius: 999, height: 48, fs: 14, onTap: () => context.push('/m/listings')),
             if (mine.isEmpty) AppButton('أضف أول إعلان', icon: LucideIcons.plus, iconFirst: true, radius: 999, height: 48, fs: 14, onTap: () => context.push('/sell')),
             for (final l in mine.take(2)) ProductCard(l),
             if (mine.length > 2)
@@ -279,9 +279,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   bool loaded = false, busy = false, sendingDoc = false;
   late bool receive;
   late Set<String> brands, cats;
-  late String name, city, bio, x, snap, tiktok, insta, location, cr, vat;
-  String iban = '';
-  String? avatar;
+  late String name, city, bio, x, snap, tiktok, insta, location, cr, vat, address;
+  String holder = '', bank = '', iban = '';
+  String? ibanError, savedIbanMasked;
+  String? crDoc, vatDoc;
 
   void _init(Profile p) {
     if (loaded) return;
@@ -292,42 +293,79 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     name = p.name ?? '';
     city = p.city ?? '';
     bio = p.bio ?? '';
-    x = '${p.socials['x'] ?? ''}';
-    snap = '${p.socials['snap'] ?? ''}';
-    tiktok = '${p.socials['tiktok'] ?? ''}';
-    insta = '${p.socials['insta'] ?? ''}';
+    x = '${p.socials['x'] ?? ''}'.replaceAll('null', '');
+    snap = '${p.socials['snap'] ?? ''}'.replaceAll('null', '');
+    tiktok = '${p.socials['tiktok'] ?? ''}'.replaceAll('null', '');
+    insta = '${p.socials['insta'] ?? ''}'.replaceAll('null', '');
     location = p.storeLocation ?? '';
     cr = p.storeCr ?? '';
     vat = p.storeVat ?? '';
-    avatar = p.avatarUrl;
+    address = p.nationalAddress ?? '';
+    crDoc = p.crDocUrl;
+    vatDoc = p.vatDocUrl;
+    Api.payout().then((po) {
+      if (!mounted) return;
+      setState(() {
+        holder = po.holder ?? '';
+        bank = po.bank ?? '';
+        savedIbanMasked = po.masked;
+      });
+    }).catchError((_) {});
   }
 
   Widget _section(String t) => Text(t, style: tx(16, w: w6, c: AppColors.pri));
   String? _nz(String s) => s.trim().isEmpty ? null : s.trim();
 
-  Future<void> _sendDoc() async {
-    if (cr.trim().isEmpty) {
-      showToast(context, 'اكتب رقم السجل التجاري أول');
-      return;
+  Future<void> _pickDoc(bool isCr) async {
+    try {
+      final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'], withData: true);
+      final f = res?.files.single;
+      if (f == null || f.bytes == null) return;
+      if (f.size > 10 * 1024 * 1024) {
+        if (mounted) showToast(context, 'حجم الملف أكبر من 10 ميقا');
+        return;
+      }
+      if (mounted) showToast(context, 'جاري رفع الملف...');
+      final path = await Api.uploadDoc(f.bytes!, f.name);
+      if (mounted) setState(() => isCr ? crDoc = path : vatDoc = path);
+    } catch (e) {
+      if (mounted) showToast(context, errMsg(e));
     }
-    final u = await pickAndUpload(context);
-    if (u == null || !mounted) return;
-    setState(() => sendingDoc = true);
-    final ok = await run(context, () async {
-      await Api.updateProfile({'store_cr': cr.trim(), 'store_vat': _nz(vat)});
-      await Api.requestVerification(u);
-    }, success: 'وصل طلب التوثيق للإدارة — بنبلّغك بالنتيجة');
-    if (!mounted) return;
-    setState(() => sendingDoc = false);
-    if (ok) ref.invalidate(myProfileProvider);
   }
 
+  Future<void> _openDoc(String path) async {
+    try {
+      final u = await Api.docUrl(path);
+      await launchUrl(Uri.parse(u), mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) showToast(context, errMsg(e));
+    }
+  }
+
+  Widget _docTile(String label, String? path, bool isCr, bool locked) => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: path != null ? AppColors.sageB : AppColors.chipB)),
+        child: Row(children: [
+          Icon(path != null ? LucideIcons.checkCircle : LucideIcons.fileText, size: 22, color: path != null ? AppColors.teal : AppColors.mute),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, style: tx(14, w: w5)),
+              Text(path != null ? 'مرفق ✓' : 'PDF أو صورة', style: tx(12, c: path != null ? AppColors.teal : AppColors.mute)),
+            ]),
+          ),
+          if (path != null) GestureDetector(onTap: () => _openDoc(path), child: Padding(padding: const EdgeInsets.all(6), child: Text('معاينة', style: tx(13, w: w5, c: AppColors.teal)))),
+          if (!locked) GestureDetector(onTap: () => _pickDoc(isCr), child: Padding(padding: const EdgeInsets.all(6), child: Text(path != null ? 'استبدال' : 'إرفاق', style: tx(13, w: w5, c: AppColors.pri)))),
+        ]),
+      );
+
   Widget _verifyCard(Profile p) {
+    final locked = p.verified || p.verifyStatus == 'pending';
     final (label, color, bg) = p.verified
         ? ('متجرك موثّق ✓', AppColors.teal, AppColors.tealBg)
         : switch (p.verifyStatus) {
             'pending' => ('طلبك قيد المراجعة', AppColors.pri, AppColors.pink),
-            'rejected' => ('الطلب مرفوض${p.verifyNote != null ? ' — ${p.verifyNote}' : ''}', AppColors.red, const Color(0xFFFBE5E2)),
+            'rejected' => ('الطلب مرفوض${p.verifyNote != null ? ' — ${p.verifyNote}' : ''}. عدّل وأعد الإرسال', AppColors.red, const Color(0xFFFBE5E2)),
             _ => ('غير موثّق', AppColors.ink2, AppColors.bg),
           };
     return AppCard(
@@ -338,7 +376,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('توثيق المتجر', style: tx(16, w: w6)),
-              Text('ارفع صورة السجل التجاري وتظهر لك شارة «تاجر موثّق» بعد مراجعة الإدارة', style: tx(12, c: AppColors.mute)),
+              Text('المستندات خاصة بك وبالإدارة فقط — ما يشوفها أي زائر', style: tx(12, c: AppColors.mute)),
             ]),
           ),
         ]),
@@ -347,11 +385,25 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
           child: Text(label, style: tx(13, w: w5, c: color)),
         ),
-        if (p.crDocUrl != null) PartThumb(width: double.infinity, height: 140, radius: 14, imageUrl: p.crDocUrl),
-        if (!p.verified)
+        _docTile('السجل التجاري', crDoc, true, locked),
+        _docTile('شهادة التسجيل الضريبي', vatDoc, false, locked),
+        LabeledField('العنوان الوطني المختصر', AppField(hint: 'مثال: RRRD2929', value: address.isEmpty ? null : address, ltrText: true, onChanged: (v) => address = v), required: true,
+            help: '8 خانات (4 حروف و4 أرقام) — تلقاه في تطبيق «سبل» أو موقع العنوان الوطني'),
+        if (!locked)
           sendingDoc
               ? const SizedBox(height: 48, child: Center(child: CircularProgressIndicator(color: AppColors.pri)))
-              : AppButton(p.crDocUrl == null ? 'ارفع صورة السجل التجاري' : 'أعد رفع السجل التجاري', icon: LucideIcons.camera, v: BtnV.out2, height: 48, fs: 15, onTap: _sendDoc),
+              : AppButton('إرسال طلب التوثيق', icon: LucideIcons.send, height: 48, fs: 15, onTap: () async {
+                  final a = latinDigits(address).replaceAll(' ', '').toUpperCase();
+                  if (cr.trim().isEmpty) return showToast(context, 'اكتب رقم السجل التجاري');
+                  if (crDoc == null || vatDoc == null) return showToast(context, 'أرفق السجل التجاري وشهادة التسجيل الضريبي');
+                  if (!RegExp(r'^[A-Z]{4}\d{4}$').hasMatch(a)) return showToast(context, 'العنوان الوطني المختصر: 4 حروف ثم 4 أرقام (مثال RRRD2929)');
+                  setState(() => sendingDoc = true);
+                  final ok = await run(context, () => Api.requestVerification(cr: latinDigits(cr.trim()), crDoc: crDoc!, vat: _nz(latinDigits(vat)), vatDoc: vatDoc!, address: a),
+                      success: 'وصل طلب التوثيق للإدارة — بنبلّغك بالنتيجة');
+                  if (!mounted) return;
+                  setState(() => sendingDoc = false);
+                  if (ok) ref.invalidate(myProfileProvider);
+                }),
       ]),
     );
   }
@@ -365,9 +417,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       showToast(context, 'اختر ماركة وحدة على الأقل عشان توصلك الطلبات');
       return;
     }
-    final ib = iban.replaceAll(' ', '').toUpperCase();
-    if (ib.isNotEmpty && !RegExp(r'^SA\d{22}$').hasMatch(ib)) {
-      showToast(context, 'الآيبان لازم يبدأ بـ SA ويتكون من 24 خانة');
+    final (ib, err) = checkIban(iban);
+    setState(() => ibanError = err);
+    if (err != null) {
+      showToast(context, err);
       return;
     }
     setState(() => busy = true);
@@ -376,23 +429,25 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'name': name.trim(),
         'city': _nz(city),
         'bio': _nz(bio),
-        'avatar_url': avatar,
         'socials': {'x': _nz(x), 'snap': _nz(snap), 'tiktok': _nz(tiktok), 'insta': _nz(insta)},
         if (p.isMerchant) ...{
           'store_location': _nz(location),
-          'store_cr': _nz(cr),
-          'store_vat': _nz(vat),
+          if (!(p.verified || p.verifyStatus == 'pending')) 'store_cr': _nz(latinDigits(cr)),
+          if (!(p.verified || p.verifyStatus == 'pending')) 'store_vat': _nz(latinDigits(vat)),
           'receive_requests': receive,
           'brands': brands.toList(),
           'categories': cats.toList(),
         },
       });
-      if (ib.isNotEmpty) await Api.setIban(ib);
+      if (holder.trim().isNotEmpty || bank.isNotEmpty || ib != null) {
+        await Api.setPayout(holder: holder.trim(), bank: bank, iban: ib);
+      }
     }, success: 'تم حفظ التعديلات');
     if (!mounted) return;
     setState(() => busy = false);
     if (ok) {
       ref.invalidate(myProfileProvider);
+      ref.invalidate(payoutProvider);
       context.pop();
     }
   }
@@ -406,59 +461,69 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     return AppPage(
       header: const AppHeader(title: 'تعديل الملف'),
       children: [
-        Center(
-          child: GestureDetector(
-            onTap: () async {
-              final u = await pickAndUpload(context);
-              if (u != null) setState(() => avatar = u);
-            },
-            child: Column(children: [
-              SizedBox(
-                width: 120,
-                height: 120,
-                child: Stack(children: [
-                  Container(
-                    width: 120,
-                    height: 120,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: const BoxDecoration(color: AppColors.beige, shape: BoxShape.circle),
-                    child: avatar != null ? Image.network(avatar!, fit: BoxFit.cover) : Icon(merchant ? LucideIcons.store : LucideIcons.user, size: 52, color: AppColors.thumbIcon),
-                  ),
-                  Positioned(
-                    left: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(color: AppColors.pri, shape: BoxShape.circle, border: Border.all(color: AppColors.bg, width: 3)),
-                      child: const Icon(LucideIcons.camera, size: 20, color: AppColors.white),
-                    ),
-                  ),
-                ]),
-              ),
-              const SizedBox(height: 10),
-              Text(merchant ? 'تغيير الشعار' : 'تغيير الصورة', style: tx(14, w: w5, c: AppColors.teal)),
-            ]),
+        Row(children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => changeProfileImage(context, ref, cover: false),
+              child: Column(children: [
+                Container(
+                  width: 96,
+                  height: 96,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: const BoxDecoration(color: AppColors.beige, shape: BoxShape.circle),
+                  child: p.avatarUrl != null ? Image.network(p.avatarUrl!, fit: BoxFit.cover) : Icon(merchant ? LucideIcons.store : LucideIcons.user, size: 42, color: AppColors.thumbIcon),
+                ),
+                const SizedBox(height: 8),
+                Text(merchant ? 'تغيير الشعار' : 'تغيير صورة العرض', style: tx(13, w: w5, c: AppColors.teal)),
+              ]),
+            ),
           ),
-        ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => changeProfileImage(context, ref, cover: true),
+              child: Column(children: [
+                Container(
+                  width: 150,
+                  height: 96,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(gradient: AppColors.gradient, borderRadius: BorderRadius.circular(16)),
+                  child: p.coverUrl != null ? Image.network(p.coverUrl!, fit: BoxFit.cover) : const Icon(LucideIcons.camera, size: 28, color: AppColors.white),
+                ),
+                const SizedBox(height: 8),
+                Text('تغيير صورة الغلاف', style: tx(13, w: w5, c: AppColors.teal)),
+              ]),
+            ),
+          ),
+        ]),
+        Text('الصورتان تنحفظ مباشرة بعد الاختيار', textAlign: TextAlign.center, style: tx(11, c: AppColors.mute)),
         _section('المعلومات الأساسية'),
         LabeledField('رقم الجوال (تسجيل الدخول)', AppField(value: ltr(p.phone ?? ''), icon: LucideIcons.smartphone, locked: true)),
         LabeledField('الاسم', AppField(value: name, onChanged: (v) => name = v)),
         LabeledField('المدينة', AppField(key: ValueKey(city), value: city.isEmpty ? null : city, hint: 'اختر مدينتك', chevron: true, onTap: () => pickFromSheet(context, 'المدينة', Mock.cities, (v) => setState(() => city = v)))),
-        LabeledField('نبذة (اختياري)', AppField(hint: 'وش يميّزك؟', value: bio.isEmpty ? null : bio, area: true, onChanged: (v) => bio = v)),
+        LabeledField('نبذة (اختياري)', AppField(hint: 'وش يميّزك؟', value: bio.isEmpty ? null : bio, area: true, onChanged: (v) => bio = v), help: 'تظهر تحت اسمك في حسابك وملفك العام'),
         _section('حسابات التواصل (اختياري)'),
         LabeledField('تويتر / X', AppField(hint: '@username', value: x.isEmpty ? null : x, icon: LucideIcons.atSign, ltrText: true, onChanged: (v) => x = v)),
         LabeledField('سناب شات', AppField(hint: 'username', value: snap.isEmpty ? null : snap, icon: LucideIcons.camera, ltrText: true, onChanged: (v) => snap = v)),
         LabeledField('تيك توك', AppField(hint: '@username', value: tiktok.isEmpty ? null : tiktok, icon: LucideIcons.music, ltrText: true, onChanged: (v) => tiktok = v)),
         LabeledField('إنستقرام', AppField(hint: '@username', value: insta.isEmpty ? null : insta, icon: LucideIcons.camera, ltrText: true, onChanged: (v) => insta = v)),
+        _section('الحساب البنكي لاستلام مبالغ البيع'),
+        Text(merchant ? 'لتحويل أرباح مبيعاتك' : 'مطلوب فقط إذا بعت قطعة — الشراء ما يحتاجه. بياناتك خاصة وما تظهر لأحد', style: tx(12, c: AppColors.mute)),
+        LabeledField('اسم صاحب الحساب', AppField(key: ValueKey('h$holder'), hint: 'كما هو في البنك', value: holder.isEmpty ? null : holder, onChanged: (v) => holder = v)),
+        LabeledField('البنك', AppField(key: ValueKey('bk$bank'), hint: 'اختر البنك', value: bank.isEmpty ? null : bank, chevron: true, onTap: () => pickFromSheet(context, 'البنك', Mock.banks, (v) => setState(() => bank = v)))),
+        LabeledField(
+          'الآيبان',
+          AppField(hint: 'SA00 0000 0000 0000 0000 0000', ltrText: true, onChanged: (v) {
+            iban = v;
+            if (ibanError != null) setState(() => ibanError = null);
+          }),
+          help: ibanError ?? (savedIbanMasked != null ? 'المحفوظ: $savedIbanMasked — اتركه فاضي للإبقاء عليه' : 'SA ثم 22 رقم (24 خانة) — تقدر تلصقه بالمسافات'),
+        ),
         if (merchant) ...[
+          _section('بيانات المحل'),
           LabeledField('موقع المحل (اختياري)', AppField(hint: 'رابط خرائط قوقل للمحل', value: location.isEmpty ? null : location, icon: LucideIcons.mapPin, onChanged: (v) => location = v)),
-          _section('بيانات المحل (للتاجر)'),
-          LabeledField('السجل التجاري', AppField(hint: 'رقم السجل التجاري', value: cr.isEmpty ? null : cr, ltrText: true, keyboard: TextInputType.number, onChanged: (v) => cr = v)),
-          LabeledField('الرقم الضريبي (إن وجد)', AppField(hint: 'الرقم الضريبي', value: vat.isEmpty ? null : vat, ltrText: true, keyboard: TextInputType.number, onChanged: (v) => vat = v)),
+          LabeledField('السجل التجاري', AppField(hint: 'رقم السجل التجاري', value: cr.isEmpty ? null : cr, ltrText: true, keyboard: TextInputType.number, locked: p.verified || p.verifyStatus == 'pending', onChanged: (v) => cr = v)),
+          LabeledField('الرقم الضريبي (إن وجد)', AppField(hint: 'الرقم الضريبي', value: vat.isEmpty ? null : vat, ltrText: true, keyboard: TextInputType.number, locked: p.verified || p.verifyStatus == 'pending', onChanged: (v) => vat = v)),
           _verifyCard(p),
-          LabeledField('الآيبان (لتحويل المبيعات)', AppField(hint: 'SAxx xxxx xxxx xxxx xxxx xxxx', ltrText: true, onChanged: (v) => iban = v),
-              help: 'اتركه فارغاً للإبقاء على الآيبان المحفوظ، أو اكتب الجديد (24 خانة تبدأ بـ SA)'),
           ToggleRow(title: 'أستقبل طلبات القطع من العملاء', sub: 'أوقفه لو ما تبي تصلك طلبات القطع الموجّهة لتخصصك', value: receive, onChanged: (v) => setState(() => receive = v)),
           LabeledField('تخصص المحل — الماركات',
               ChipWrap(Mock.allBrands.toSet().toList(), selected: brands, px: 14, py: 8, onTap: (b) => setState(() => brands.contains(b) ? brands.remove(b) : brands.add(b))),
@@ -563,7 +628,7 @@ class _MyCarsScreenState extends ConsumerState<MyCarsScreen> {
               AppField(key: ValueKey('y$year'), value: year, chevron: true, onTap: () => pickFromSheet(context, 'سنة الصنع', [for (var y = DateTime.now().year + 1; y >= 1990; y--) '$y'], (x) => setState(() => year = x)))),
           LabeledField('رقم الهيكل / VIN (اختياري)', AppField(hint: '17 خانة', ltrText: true, onChanged: (x) => vin = x)),
           AppButton('حفظ السيارة', onTap: () async {
-            final ok = await run(context, () => Api.addCar({'brand': brand, 'model': model, 'year': int.tryParse(year), 'vin': vin.trim().isEmpty ? null : vin.trim().toUpperCase()}),
+            final ok = await run(context, () => Api.addCar({'brand': brand, 'model': model, 'year': int.tryParse(year), 'vin': vin.trim().isEmpty ? null : latinDigits(vin.trim()).toUpperCase()}),
                 success: 'تمت إضافة السيارة');
             if (ok) {
               ref.invalidate(carsProvider);

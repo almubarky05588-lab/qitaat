@@ -43,7 +43,7 @@ class MainShell extends ConsumerWidget {
                 Expanded(child: _tab(0, LucideIcons.home, AppIconsFill.home, 'الرئيسية')),
                 Expanded(child: _tab(1, LucideIcons.shoppingBag, AppIconsFill.shoppingBag, 'مشترياتي')),
                 const SizedBox(width: 76),
-                Expanded(child: _tab(2, LucideIcons.archive, AppIconsFill.archive, 'طلبات', badge: badge)),
+                Expanded(child: _tab(2, LucideIcons.clipboard, AppIconsFill.archive, 'طلبات', badge: badge)),
                 Expanded(child: _tab(3, LucideIcons.user, AppIconsFill.user, 'حسابي')),
               ]),
             ),

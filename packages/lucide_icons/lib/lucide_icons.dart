@@ -80,6 +80,7 @@ class LucideIcons {
   static const IconData pause = IconData(0xe39e, fontFamily: 'PhRegular', fontPackage: _pkg); // pause
   static const IconData printer = IconData(0xe3dc, fontFamily: 'PhRegular', fontPackage: _pkg); // printer
   static const IconData landmark = IconData(0xe0b4, fontFamily: 'PhRegular', fontPackage: _pkg); // bank
+  static const IconData clipboard = IconData(0xe198, fontFamily: 'PhRegular', fontPackage: _pkg); // clipboardText
   static const IconData crown = IconData(0xe614, fontFamily: 'PhRegular', fontPackage: _pkg); // crown
 }
 
@@ -89,7 +90,7 @@ class AppIconsFill {
 
   static const IconData home = IconData(0xe2c2, fontFamily: 'PhFill', fontPackage: _pkg); // house
   static const IconData shoppingBag = IconData(0xe29c, fontFamily: 'PhFill', fontPackage: _pkg); // handbag
-  static const IconData archive = IconData(0xe390, fontFamily: 'PhFill', fontPackage: _pkg); // package
+  static const IconData archive = IconData(0xe198, fontFamily: 'PhFill', fontPackage: _pkg); // clipboardText
   static const IconData user = IconData(0xe4c2, fontFamily: 'PhFill', fontPackage: _pkg); // user
 }
 

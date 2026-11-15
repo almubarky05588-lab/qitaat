@@ -48,9 +48,16 @@ class PromoBanner {
   }
 }
 
+/// البنرات الفعّالة فقط (مفعّلة وضمن مدة العرض) — لو ما فيه ولا واحد يختفي القسم كامل
 final bannersProvider = FutureProvider<List<PromoBanner>>((ref) async {
   final r = await sb.from('banners').select().eq('active', true).order('sort');
-  return r.map<PromoBanner>((e) => PromoBanner.fromJson(Map<String, dynamic>.from(e))).toList();
+  final now = DateTime.now();
+  bool live(Map j) {
+    final s = DateTime.tryParse('${j['starts_at'] ?? ''}'), e = DateTime.tryParse('${j['ends_at'] ?? ''}');
+    return (s == null || !now.isBefore(s)) && (e == null || now.isBefore(e));
+  }
+
+  return r.where(live).map<PromoBanner>((e) => PromoBanner.fromJson(Map<String, dynamic>.from(e))).toList();
 });
 
 const _tabRoutes = {'/home', '/orders', '/requests', '/account'};
@@ -142,8 +149,8 @@ class _PromoCarouselState extends ConsumerState<PromoCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    final v = ref.watch(bannersProvider);
-    final list = (v.valueOrNull?.isNotEmpty ?? false) ? v.valueOrNull! : const [PromoBanner.fallback()];
+    final list = ref.watch(bannersProvider).valueOrNull ?? const <PromoBanner>[];
+    if (list.isEmpty) return const SizedBox.shrink();
     count = list.length;
     if (page >= count) page = 0;
     return Column(children: [

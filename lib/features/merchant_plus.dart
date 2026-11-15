@@ -192,9 +192,9 @@ class _ListingsManagerScreenState extends ConsumerState<ListingsManagerScreen> {
         'active' => l.boosted
             ? StatusBadge('مميز${l.featuredUntil != null ? ' حتى ${fmtTime(l.featuredUntil!)}' : ''}', icon: LucideIcons.star)
             : (l.quantity <= 1 ? const StatusBadge('نشط · قاربت تنفد', icon: LucideIcons.alertCircle) : const StatusBadge.teal('نشط')),
-        'paused' => const StatusBadge.grey('موقوف'),
+        'paused' => const StatusBadge.grey('موقوف · غير ظاهر للعامة'),
         'sold' => const StatusBadge.teal('مباع', icon: LucideIcons.check),
-        _ => const StatusBadge.grey('مسودة'),
+        _ => const StatusBadge.grey('مسودة · غير منشورة', icon: LucideIcons.pencil),
       };
 
   Widget _item(Listing l) => AppCard(
@@ -225,9 +225,10 @@ class _ListingsManagerScreenState extends ConsumerState<ListingsManagerScreen> {
             })),
             const SizedBox(width: 8),
             Expanded(
-                child: AppButton(l.status == 'paused' || l.status == 'draft' ? 'تفعيل' : 'إيقاف',
-                    icon: LucideIcons.pause, iconFirst: true, v: BtnV.ink, height: 40, fs: 13, radius: 12, disabled: l.status == 'sold', onTap: () async {
-              await run(context, () => Api.updateListing(l.id, {'status': l.status == 'active' ? 'paused' : 'active'}));
+                child: AppButton(l.status == 'draft' ? 'نشر' : (l.status == 'paused' ? 'تفعيل' : 'إيقاف'),
+                    icon: l.status == 'active' ? LucideIcons.pause : LucideIcons.send, iconFirst: true, v: BtnV.ink, height: 40, fs: 13, radius: 12, disabled: l.status == 'sold', onTap: () async {
+              await run(context, () => Api.updateListing(l.id, {'status': l.status == 'active' ? 'paused' : 'active'}),
+                  success: l.status == 'draft' ? 'تم نشر الإعلان' : null);
               ref.invalidate(myListingsProvider);
             })),
             if (l.status == 'active' && !l.boosted) ...[
@@ -259,10 +260,11 @@ class _ListingsManagerScreenState extends ConsumerState<ListingsManagerScreen> {
     final groups = [
       all,
       all.where((l) => l.status == 'active').toList(),
-      all.where((l) => l.status == 'paused' || l.status == 'draft').toList(),
+      all.where((l) => l.status == 'paused').toList(),
+      all.where((l) => l.status == 'draft').toList(),
       all.where((l) => l.status == 'sold').toList(),
     ];
-    final labels = ['الكل', 'نشطة', 'موقوفة', 'مباعة'];
+    final labels = ['الكل', 'نشطة', 'موقوفة', 'مسودات', 'مباعة'];
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
@@ -276,7 +278,7 @@ class _ListingsManagerScreenState extends ConsumerState<ListingsManagerScreen> {
           ]),
           Padding(padding: const EdgeInsets.fromLTRB(20, 0, 20, 12), child: AppField(hint: 'ابحث في إعلاناتك...', icon: LucideIcons.search, onChanged: (t) => setState(() => q = t.trim()))),
           ChipScroller(children: [
-            for (var i = 0; i < 4; i++) AppChip('${labels[i]} (${groups[i].length})', selected: filter == i, px: 14, py: 7, onTap: () => setState(() => filter = i)),
+            for (var i = 0; i < labels.length; i++) AppChip('${labels[i]} (${groups[i].length})', selected: filter == i, px: 14, py: 7, onTap: () => setState(() => filter = i)),
           ]),
           Expanded(
             child: v.isLoading

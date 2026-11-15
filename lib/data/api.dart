@@ -74,12 +74,24 @@ String fmtLeft(DateTime? d) {
 
 /// الآيبان السعودي: SA + 22 رقم (24 خانة) — يرجع الصيغة الموحّدة أو رسالة الخطأ
 (String?, String?) checkIban(String raw) {
-  final v = latinDigits(raw).replaceAll(RegExp(r'[\s\-]'), '').toUpperCase();
+  // نشيل المسافات والشرطات وعلامات الاتجاه المخفية اللي تجي مع النسخ واللصق
+  final v = latinDigits(raw).replaceAll(RegExp(r'[\s\-‎‏‪-‮⁦-⁩]'), '').toUpperCase();
   if (v.isEmpty) return (null, null);
+  if (!RegExp(r'^[A-Z0-9]+$').hasMatch(v)) return (null, 'الآيبان يقبل حروف إنجليزية وأرقام فقط');
   if (!v.startsWith('SA')) return (null, 'الآيبان السعودي يبدأ بـ SA');
-  final digits = v.substring(2);
-  if (!RegExp(r'^\d+$').hasMatch(digits)) return (null, 'بعد SA لازم تكون أرقام فقط');
-  if (digits.length != 22) return (null, 'الآيبان ناقص أو زايد: كتبت ${digits.length} رقم بعد SA والمطلوب 22 (المجموع 24 خانة)');
+  if (v.length != 24) return (null, 'طول الآيبان ${v.length} خانة والمطلوب 24 خانة (SA ثم 22 خانة)');
+  if (!RegExp(r'^SA\d{4}[A-Z0-9]{18}$').hasMatch(v)) return (null, 'صيغة غير صحيحة: بعد SA رقمين تحقق ثم رمز البنك (رقمين) ثم رقم الحساب');
+  // التحقق الدولي (ISO 13616 — باقي القسمة على 97 لازم يساوي 1)
+  final r = v.substring(4) + v.substring(0, 4);
+  var rem = 0;
+  for (final ch in r.split('')) {
+    final c = ch.codeUnitAt(0);
+    final val = c >= 65 ? '${c - 55}' : ch;
+    for (final d in val.split('')) {
+      rem = (rem * 10 + int.parse(d)) % 97;
+    }
+  }
+  if (rem != 1) return (null, 'رقم الآيبان غير صحيح — راجع الخانات (فيه خانة ناقصة أو مكتوبة غلط)');
   return (v, null);
 }
 
@@ -92,7 +104,9 @@ String errMsg(Object e) {
     return 'تعذّر الاتصال، حاول مرة ثانية';
   }
   if (e is StorageException) return e.message;
-  return 'صار خطأ: $e';
+  final t = '$e';
+  if (t.startsWith('Exception: ')) return t.substring(11);
+  return 'صار خطأ: $t';
 }
 
 // ───────────────── النماذج ─────────────────
@@ -104,6 +118,8 @@ class Profile {
   final List<String> brands, categories;
   final bool receiveRequests, verified;
   final Map<String, dynamic> socials;
+  final DateTime? crSetAt, deletedAt;
+  final double? storeLat, storeLng;
   Profile.fromJson(Map<String, dynamic> j)
       : id = j['id'],
         phone = j['phone'],
@@ -126,8 +142,18 @@ class Profile {
         categories = _sl(j['categories']),
         receiveRequests = j['receive_requests'] ?? true,
         verified = j['verified'] ?? false,
-        socials = Map<String, dynamic>.from(j['socials'] ?? {});
+        socials = Map<String, dynamic>.from(j['socials'] ?? {}),
+        crSetAt = _d(j['cr_set_at']),
+        deletedAt = _d(j['deleted_at']),
+        storeLat = (j['store_lat'] as num?)?.toDouble(),
+        storeLng = (j['store_lng'] as num?)?.toDouble();
   bool get isMerchant => role == 'merchant';
+  bool get isDeleted => deletedAt != null;
+
+  /// مهلة تعديل السجل التجاري: 24 ساعة من أول حفظ
+  static const crEditHours = 24;
+  DateTime? get crDeadline => crSetAt?.add(const Duration(hours: crEditHours));
+  bool get crExpired => (storeCr ?? '').isNotEmpty && (crDeadline == null || DateTime.now().isAfter(crDeadline!));
   String get displayName => (name == null || name!.isEmpty) ? 'مستخدم' : name!;
   String get initial => displayName.substring(0, 1);
   String get planLabel => switch (plan) { 'pro' => 'لولو برو', 'pro_max' => 'لولو برو ماكس', _ => 'لولو المجانية' };
@@ -150,18 +176,32 @@ class Profile {
   }
 }
 
+/// سيارة متوافقة مع القطعة: الشركة، اسم السيارة، ونطاق سنوات
+class Fitment {
+  final String brand;
+  final String? model;
+  final int? from, to;
+  const Fitment(this.brand, {this.model, this.from, this.to});
+  factory Fitment.fromJson(Map j) => Fitment('${j['brand'] ?? ''}',
+      model: (j['model'] ?? '').toString().isEmpty ? null : '${j['model']}', from: int.tryParse('${j['from'] ?? ''}'), to: int.tryParse('${j['to'] ?? ''}'));
+  Map<String, dynamic> toJson() => {'brand': brand, if (model != null) 'model': model, if (from != null) 'from': from, if (to != null) 'to': to};
+  String get years => from == null ? '' : (to != null && to != from ? '$from–$to' : '$from');
+  String get label => [brand, model ?? '', years].where((e) => e.isNotEmpty).join(' ');
+}
+
 class Listing {
   final String id, sellerId, title, condition, saleType, status;
   final String? brand, model, category, city, description;
   final int? yearFrom, yearTo;
   final num? price, startPrice;
-  final DateTime? auctionEndsAt, createdAt, featuredUntil;
+  final DateTime? auctionEndsAt, createdAt, featuredUntil, featuredFrom;
   final int quantity, views;
   final List<String> delivery, images;
   final Profile? seller;
   final num? topBid;
   final int bidsCount;
   final bool featured;
+  final List<Fitment> fitments;
   Listing.fromJson(Map<String, dynamic> j)
       : id = j['id'],
         sellerId = j['seller_id'],
@@ -181,6 +221,7 @@ class Listing {
         auctionEndsAt = _d(j['auction_ends_at']),
         createdAt = _d(j['created_at']),
         featuredUntil = _d(j['featured_until']),
+        featuredFrom = _d(j['featured_from']),
         quantity = j['quantity'] ?? 1,
         views = j['views'] ?? 0,
         featured = j['featured'] ?? false,
@@ -188,6 +229,7 @@ class Listing {
         images = _sl(j['images']),
         seller = j['seller'] is Map ? Profile.fromJson(Map<String, dynamic>.from(j['seller'])) : null,
         topBid = _topBid(j['bids']),
+        fitments = j['fitments'] is List ? [for (final f in j['fitments'] as List) if (f is Map && '${f['brand'] ?? ''}'.isNotEmpty) Fitment.fromJson(f)] : const [],
         bidsCount = j['bids'] is List ? (j['bids'] as List).where((b) => b['status'] != 'rejected').length : 0;
   static num? _topBid(dynamic bids) {
     if (bids is! List || bids.isEmpty) return null;
@@ -200,10 +242,13 @@ class Listing {
     return m;
   }
 
-  bool get boosted => featured || (featuredUntil != null && featuredUntil!.isAfter(DateTime.now()));
+  bool get boosted =>
+      featured || (featuredUntil != null && featuredUntil!.isAfter(DateTime.now()) && (featuredFrom == null || !featuredFrom!.isAfter(DateTime.now())));
+  bool get boostScheduled => featuredFrom != null && featuredFrom!.isAfter(DateTime.now());
   bool get auction => saleType == 'auction';
   String get priceLabel => auction ? 'على السوم' : fmtMoney(price ?? 0);
   String get fits {
+    if (fitments.length > 1) return fitments.map((f) => f.label).join('، ');
     final y = yearFrom == null ? '' : (yearTo != null && yearTo != yearFrom ? '$yearFrom – $yearTo' : '$yearFrom');
     return [brand, model, y].where((e) => e != null && e.isNotEmpty).join(' ');
   }
@@ -273,6 +318,39 @@ class PartRequest {
   num? get bestPrice => liveOffers.isEmpty ? null : liveOffers.map((o) => o.price).reduce((a, b) => a < b ? a : b);
 }
 
+/// بند في عرض السعر: كل قطعة لها سعرها ونوعها وحالتها وتوفرها
+class OfferItem {
+  final String name;
+  final int qty;
+  final num? unitPrice;
+  final String type; // أصلي / تجاري
+  final String condition; // جديد / مستعمل / مجدد
+  final bool available;
+  const OfferItem(this.name, {this.qty = 1, this.unitPrice, this.type = 'أصلي', this.condition = 'جديد', this.available = true});
+  factory OfferItem.fromJson(Map j) => OfferItem('${j['name'] ?? ''}',
+      qty: int.tryParse('${j['qty'] ?? 1}') ?? 1,
+      unitPrice: num.tryParse('${j['unit_price'] ?? ''}'),
+      type: '${j['type'] ?? 'أصلي'}',
+      condition: '${j['condition'] ?? 'جديد'}',
+      available: j['available'] != false);
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'qty': qty,
+        'available': available,
+        if (available) 'unit_price': unitPrice,
+        if (available) 'type': type,
+        if (available) 'condition': condition,
+      };
+  num get total => available ? (unitPrice ?? 0) * qty : 0;
+  OfferItem copy({int? qty, num? unitPrice, bool clearPrice = false, String? type, String? condition, bool? available}) => OfferItem(name,
+      qty: qty ?? this.qty,
+      unitPrice: clearPrice ? null : (unitPrice ?? this.unitPrice),
+      type: type ?? this.type,
+      condition: condition ?? this.condition,
+      available: available ?? this.available);
+  static List<OfferItem> list(dynamic v) => v is List ? [for (final e in v) if (e is Map) OfferItem.fromJson(e)] : const [];
+}
+
 class Offer {
   final String id, requestId, supplierId, condition, status;
   final num price;
@@ -281,6 +359,7 @@ class Offer {
   final List<String> images;
   final DateTime? createdAt;
   final Profile? supplier;
+  final List<OfferItem> items;
   Offer.fromJson(Map<String, dynamic> j)
       : id = j['id'] ?? '',
         requestId = j['request_id'] ?? '',
@@ -294,7 +373,11 @@ class Offer {
         note = j['note'],
         images = _sl(j['images']),
         createdAt = _d(j['created_at']),
-        supplier = j['supplier'] is Map ? Profile.fromJson(Map<String, dynamic>.from(j['supplier'])) : null;
+        supplier = j['supplier'] is Map ? Profile.fromJson(Map<String, dynamic>.from(j['supplier'])) : null,
+        items = OfferItem.list(j['items']);
+  List<OfferItem> get availableItems => items.where((e) => e.available).toList();
+  List<OfferItem> get missingItems => items.where((e) => !e.available).toList();
+  bool get partial => missingItems.isNotEmpty;
 }
 
 class OrderPhoto {
@@ -313,6 +396,10 @@ class Order {
   final Profile? seller, buyer;
   final List<OrderPhoto> photos;
   final String? image;
+  final List<OfferItem> items;
+  final num? commissionRate, commission, sellerNet;
+  final DateTime? availableAt;
+  final String payoutStatus;
   Order.fromJson(Map<String, dynamic> j)
       : id = j['id'],
         orderNo = j['order_no'] ?? '',
@@ -342,7 +429,21 @@ class Order {
         seller = j['seller'] is Map ? Profile.fromJson(Map<String, dynamic>.from(j['seller'])) : null,
         buyer = j['buyer'] is Map ? Profile.fromJson(Map<String, dynamic>.from(j['buyer'])) : null,
         photos = j['order_photos'] is List ? (j['order_photos'] as List).map((e) => OrderPhoto.fromJson(Map<String, dynamic>.from(e))).toList() : [],
-        image = (j['listing'] is Map && (j['listing']['images'] as List?)?.isNotEmpty == true) ? '${j['listing']['images'][0]}' : null;
+        image = (j['listing'] is Map && (j['listing']['images'] as List?)?.isNotEmpty == true) ? '${j['listing']['images'][0]}' : null,
+        items = OfferItem.list(j['items']),
+        commissionRate = _nn(j['commission_rate']),
+        commission = _nn(j['commission']),
+        sellerNet = _nn(j['seller_net']),
+        availableAt = _d(j['available_at']),
+        payoutStatus = j['payout_status'] ?? 'held';
+
+  /// حالة مستحقات المورد: معلّق / متاح / قيد التحويل / تم التحويل
+  String get payoutLabel => switch (payoutStatus) {
+        'requested' || 'processing' => 'قيد التحويل',
+        'paid' => 'تم التحويل',
+        'cancelled' => 'ملغي',
+        _ => (availableAt != null && !availableAt!.isAfter(DateTime.now()) && (status == 'shipped' || status == 'delivered')) ? 'متاح' : 'معلّق',
+      };
 
   /// تقدّم الطلب من 5 (طلب، دفع، تجهيز، شحن، تسليم)
   int get progress => switch (status) {
@@ -386,6 +487,7 @@ class Message {
   final List<String> images;
   final DateTime createdAt;
   final DateTime? readAt;
+  final bool masked;
   Message.fromJson(Map<String, dynamic> j)
       : id = j['id'],
         conversationId = j['conversation_id'],
@@ -393,7 +495,8 @@ class Message {
         body = j['body'],
         images = _sl(j['images']),
         createdAt = _d(j['created_at']) ?? DateTime.now(),
-        readAt = _d(j['read_at']);
+        readAt = _d(j['read_at']),
+        masked = j['masked'] == true;
   bool get mine => senderId == myId;
 }
 
@@ -460,7 +563,7 @@ class Api {
     var f = sb.from('listings').select(_listingSel);
     if (status != null) f = f.eq('status', status);
     if (sellerId != null) f = f.eq('seller_id', sellerId);
-    if (brand != null && brand.isNotEmpty) f = f.eq('brand', brand);
+    if (brand != null && brand.isNotEmpty) f = f.or('brand.eq."$brand",fit_brands.cs.{"$brand"}');
     if (auctionOnly) f = f.eq('sale_type', 'auction');
     if (q != null && q.trim().isNotEmpty) {
       final words = q.trim().split(RegExp(r'\s+'));
@@ -637,8 +740,16 @@ class Api {
       .from('messages')
       .stream(primaryKey: ['id'])
       .eq('conversation_id', conversationId)
-      .order('created_at')
-      .map((rows) => rows.map((e) => Message.fromJson(e)).toList());
+      .order('created_at', ascending: true)
+      .map((rows) {
+        // الأقدم فوق والأحدث تحت — ترتيب ثابت حتى لو تساوى الوقت
+        final list = rows.map((e) => Message.fromJson(e)).toList();
+        list.sort((a, b) {
+          final c = a.createdAt.compareTo(b.createdAt);
+          return c != 0 ? c : a.id.compareTo(b.id);
+        });
+        return list;
+      });
 
   static Future<void> sendMessage(String conversationId, {String? body, List<String> images = const []}) =>
       sb.from('messages').insert({'conversation_id': conversationId, 'sender_id': myId, 'body': body, 'images': images});
@@ -688,6 +799,29 @@ class Api {
       });
 
   static Future<String?> iban() async => (await payout()).iban;
+
+  static Future<void> requestPayout() => sb.rpc('request_payout');
+
+  // الدعم الفني
+  static Future<List<Map<String, dynamic>>> myTickets() async =>
+      List<Map<String, dynamic>>.from(await sb.from('support_tickets').select().eq('user_id', myId!).order('created_at', ascending: false));
+  static Future<void> createTicket({required String kind, required String subject, String? body}) =>
+      sb.from('support_tickets').insert({'user_id': myId, 'kind': kind, 'subject': subject, 'body': body});
+
+  // بلاغ عن محادثة (محاولة بيع أو تحويل خارج التطبيق)
+  static Future<void> reportChat(String conversationId, String reason, {String? details}) =>
+      sb.from('chat_reports').insert({'conversation_id': conversationId, 'reporter_id': myId, 'reason': reason, 'details': details});
+
+  /// حذف الحساب: يوقف الإعلانات ويحفظ الفواتير والطلبات لحقوق العملاء
+  static Future<void> deleteAccount() async {
+    await sb.rpc('delete_my_account');
+    await sb.auth.signOut();
+  }
+
+  static Future<List<Map<String, dynamic>>> myPayouts() async =>
+      List<Map<String, dynamic>>.from(await sb.from('payouts').select('id,amount,status,created_at,paid_at').eq('user_id', myId!).order('created_at', ascending: false).limit(30));
+
+  static Future<void> deletePayout() => sb.from('payout_accounts').delete().eq('user_id', myId!);
 
   static Future<List<Car>> cars() async {
     final r = await sb.from('cars').select().eq('user_id', myId!).order('created_at');
@@ -772,4 +906,12 @@ final notificationsProvider = StreamProvider<List<Notif>>((ref) {
   ref.watch(authProvider);
   if (myId == null) return Stream.value(const []);
   return Api.notifications();
+});
+
+/// مجموع الرسائل غير المقروءة في كل المحادثات (يتحدّث مع كل إشعار جديد)
+final unreadChatsProvider = FutureProvider<int>((ref) async {
+  ref.watch(notificationsProvider);
+  if (myId == null) return 0;
+  final m = await Api.unreadByConversation();
+  return m.values.fold<int>(0, (a, b) => a + b);
 });

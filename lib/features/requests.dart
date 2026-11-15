@@ -5,31 +5,51 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../app/state.dart';
 import '../core/media.dart';
+import '../core/product_widgets.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
 import '../data/api.dart';
 import '../data/mock.dart';
 
 /// اختيار من قائمة في نافذة سفلية
-void pickFromSheet(BuildContext context, String title, List<String> options, ValueChanged<String> onPick) {
+/// توحيد الحروف العربية للبحث (أ/إ/آ → ا، ة → ه، ى → ي)
+String normAr(String s) => latinDigits(s).replaceAll(RegExp('[أإآ]'), 'ا').replaceAll('ة', 'ه').replaceAll('ى', 'ي').toLowerCase().trim();
+
+/// نافذة اختيار من قائمة — يظهر فيها بحث تلقائياً إذا كانت القائمة طويلة
+void pickFromSheet(BuildContext context, String title, List<String> options, ValueChanged<String> onPick, {String? selected, Map<String, String> subs = const {}}) {
+  final searchable = options.length > 14;
+  var q = '';
   showAppSheet(
     context,
-    Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Text(title, style: tx(18, w: w6)),
-      const SizedBox(height: 12),
-      ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 380),
-        child: SingleChildScrollView(
-          child: Wrap(spacing: 8, runSpacing: 10, children: [
-            for (final o in options)
-              AppChip(o, onTap: () {
-                onPick(o);
-                Navigator.pop(context);
-              }),
-          ]),
+    StatefulBuilder(builder: (ctx, set) {
+      final nq = normAr(q);
+      final list = nq.isEmpty ? options : options.where((o) => normAr(o).contains(nq) || normAr(subs[o] ?? '').contains(nq)).toList();
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(title, style: tx(18, w: w6)),
+        if (searchable) ...[
+          const SizedBox(height: 12),
+          AppField(hint: 'ابحث...', icon: LucideIcons.search, fill: AppColors.bg, onChanged: (t) => set(() => q = t)),
+        ],
+        const SizedBox(height: 12),
+        ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: searchable ? MediaQuery.of(ctx).size.height * 0.45 : 380),
+          child: list.isEmpty
+              ? Padding(padding: const EdgeInsets.symmetric(vertical: 24), child: Text('لا توجد نتائج', textAlign: TextAlign.center, style: tx(14, c: AppColors.mute)))
+              : SingleChildScrollView(
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Wrap(spacing: 8, runSpacing: 10, children: [
+                      for (final o in list)
+                        AppChip(o, selected: o == selected, onTap: () {
+                          onPick(o);
+                          Navigator.pop(context);
+                        }),
+                    ]),
+                  ),
+                ),
         ),
-      ),
-    ]),
+      ]);
+    }),
   );
 }
 
@@ -209,7 +229,7 @@ class _RequestPartScreenState extends ConsumerState<RequestPartScreen> {
                     })))),
         LabeledField('الموديل', AppField(key: ValueKey('m$model'), value: model, chevron: true, onTap: () => pickFromSheet(context, 'الموديل', Mock.modelsOf(brand), (v) => setState(() => model = v)))),
         LabeledField(
-            'سنة الصنع', AppField(key: ValueKey('y$year'), value: year, chevron: true, onTap: () => pickFromSheet(context, 'سنة الصنع', [for (var y = DateTime.now().year + 1; y >= 1990; y--) '$y'], (v) => setState(() => year = v)))),
+            'سنة الصنع', AppField(key: ValueKey('y$year'), value: year, chevron: true, onTap: () => pickFromSheet(context, 'سنة الصنع', Mock.years, (v) => setState(() => year = v)))),
         LabeledField('رقم الهيكل / VIN (اختياري)', AppField(key: ValueKey('v$vin'), hint: 'مثال: JTDKB20U...', value: vin.isEmpty ? null : vin, ltrText: true, onChanged: (v) => vin = v)),
         LabeledField(
           'القطع المطلوبة',
@@ -580,8 +600,9 @@ class _OfferCard extends ConsumerWidget {
             ]),
           ]),
         ),
+        if (o.items.isNotEmpty) OfferItemsTable(o.items),
         Wrap(spacing: 6, runSpacing: 6, children: [
-          AppChip('الحالة: ${o.condition}', selected: true, teal: true, fs: 12, px: 10, py: 5),
+          if (o.items.isEmpty) AppChip('الحالة: ${o.condition}', selected: true, teal: true, fs: 12, px: 10, py: 5),
           if (o.warranty != null) AppChip('ضمان ${o.warranty}', bg: const Color(0xFFF3ECE2), noBorder: true, fs: 12, px: 10, py: 5),
           if (o.deliveryTime != null) AppChip(o.deliveryTime!, bg: const Color(0xFFF3ECE2), noBorder: true, fs: 12, px: 10, py: 5),
         ]),

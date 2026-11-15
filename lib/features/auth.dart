@@ -11,6 +11,7 @@ import '../core/theme.dart';
 import '../core/widgets.dart';
 import '../data/api.dart';
 import '../data/mock.dart';
+import 'requests.dart' show pickFromSheet;
 
 // ───────────────── 01 · البداية ─────────────────
 
@@ -125,22 +126,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     );
   }
 
-  void _pickCity() {
-    showAppSheet(
-      context,
-      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('اختر مدينتك', style: tx(18, w: w6)),
-        const SizedBox(height: 12),
-        Wrap(spacing: 8, runSpacing: 10, children: [
-          for (final c in Mock.cities)
-            AppChip(c, selected: c == city, onTap: () {
-              setState(() => city = c);
-              Navigator.pop(context);
-            }),
-        ]),
-      ]),
-    );
-  }
+  void _pickCity() => pickFromSheet(context, 'اختر مدينتك', Mock.cities, (c) => setState(() => city = c), selected: city, subs: Mock.cityRegions);
 
   void _continue() {
     final p = normalizePhone(phone);

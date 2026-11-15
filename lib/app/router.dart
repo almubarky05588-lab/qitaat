@@ -59,6 +59,7 @@ final appRouter = GoRouter(
     _r('/cars', (s) => const MyCarsScreen()),
     _r('/settings', (s) => const SettingsScreen()),
     _r('/edit-profile', (s) => const EditProfileScreen()),
+    _r('/support', (s) => const SupportScreen()),
 
     // البيع (أي مستخدم) — إعلان جديد يتطلب حساب بنكي لاستلام المبلغ
     _r('/sell', (s) => s.uri.queryParameters['edit'] != null ? SellPartScreen(editId: s.uri.queryParameters['edit']) : const SellGate()),

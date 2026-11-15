@@ -155,6 +155,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
                         onTap: () async {
                           await context.push('/chat/${c.id}');
                           ref.invalidate(conversationsProvider);
+                          ref.invalidate(unreadChatsProvider);
                         },
                         child: Container(
                           color: unread > 0 ? AppColors.unread : null,
@@ -214,6 +215,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final scroll = ScrollController();
   late final Stream<List<Message>> stream = Api.messages(widget.id);
   bool sending = false;
+  int _shown = -1;
 
   @override
   void dispose() {
@@ -230,6 +232,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (!mounted) return;
     setState(() => sending = false);
     if (ok) ctrl.clear();
+  }
+
+  static const _reasons = ['طلب تحويل بنكي خارج التطبيق', 'طلب التواصل عبر واتساب أو رقم جوال', 'محاولة إتمام البيع خارج التطبيق', 'إساءة أو احتيال', 'سبب آخر'];
+
+  /// الإبلاغ عن المحادثة — تراجعه الإدارة قبل أي إجراء
+  Future<void> _report() async {
+    String? reason;
+    var details = '';
+    await showAppSheet(
+      context,
+      StatefulBuilder(
+        builder: (ctx, set) => VCol(gap: 10, [
+          Text('الإبلاغ عن المحادثة', style: tx(18, w: w6)),
+          Text('البلاغ يوصل للإدارة وتتم مراجعته — ما يُعاقب أحد بمجرد كلمة', style: tx(12, c: AppColors.mute)),
+          for (final r in _reasons) SelectCell(r, selected: reason == r, onTap: () => set(() => reason = r)),
+          AppField(hint: 'تفاصيل إضافية (اختياري)', area: true, fill: AppColors.bg, onChanged: (v) => details = v),
+          AppButton('إرسال البلاغ', v: BtnV.red, onTap: () async {
+            if (reason == null) return showToast(context, 'اختر سبب البلاغ');
+            final ok = await run(context, () => Api.reportChat(widget.id, reason!, details: details.trim().isEmpty ? null : details.trim()),
+                success: 'وصل بلاغك للإدارة — شكراً لك');
+            if (ok && ctx.mounted) Navigator.pop(ctx);
+          }),
+        ]),
+      ),
+    );
   }
 
   Widget _bubble(Message m) {
@@ -262,6 +289,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                 Text(m.body!, style: tx(14, c: me ? AppColors.white : AppColors.ink)),
+                if (m.masked)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text('أُخفيت بيانات تواصل — التعامل داخل التطبيق فقط', style: tx(10.5, c: me ? const Color(0xFFF6D9CD) : AppColors.amber)),
+                  ),
                 const SizedBox(height: 2),
                 Row(mainAxisSize: MainAxisSize.min, children: [
                   Text(fmtTime(m.createdAt), style: tx(10, c: me ? const Color(0xFFF6D9CD) : AppColors.mute)),
@@ -302,7 +334,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   if (other?.city != null) Text(other!.city!, style: tx(12, c: AppColors.teal)),
                 ]),
               ),
-              GestureDetector(onTap: () => showToast(context, 'التواصل عبر المحادثة داخل التطبيق'), child: const Icon(LucideIcons.phone, size: 22, color: AppColors.ink)),
+              GestureDetector(onTap: _report, child: const Padding(padding: EdgeInsets.all(4), child: Icon(LucideIcons.flag, size: 22, color: AppColors.ink))),
             ]),
           ),
           if (listing != null)
@@ -329,11 +361,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 if (!s.hasData) return const Loading();
                 final msgs = s.data!;
                 if (msgs.any((m) => !m.mine && m.readAt == null)) {
-                  Api.markChatRead(widget.id).catchError((_) {});
+                  Api.markChatRead(widget.id).then((_) => ref.invalidate(unreadChatsProvider)).catchError((_) {});
                 }
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (scroll.hasClients) scroll.jumpTo(scroll.position.maxScrollExtent);
-                });
+                if (msgs.length != _shown) {
+                  final first = _shown < 0;
+                  _shown = msgs.length;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!scroll.hasClients) return;
+                    if (first) {
+                      scroll.jumpTo(scroll.position.maxScrollExtent);
+                    } else {
+                      scroll.animateTo(scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+                    }
+                  });
+                }
                 return ListView(controller: scroll, padding: const EdgeInsets.all(16), children: [
                   Center(
                     child: Container(
@@ -341,6 +382,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       decoration: BoxDecoration(color: AppColors.segBg, borderRadius: BorderRadius.circular(999)),
                       child: Text(msgs.isEmpty ? 'ابدأ المحادثة' : fmtDate(msgs.first.createdAt), style: tx(12, c: AppColors.mute)),
                     ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(color: AppColors.amberBg, borderRadius: BorderRadius.circular(12)),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Icon(LucideIcons.shieldCheck, size: 16, color: AppColors.amber),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text('لحماية حقك: الشراء والدفع داخل التطبيق فقط. طلب التحويل البنكي أو التواصل خارج التطبيق مخالفة، والمحادثات تخضع للمراجعة عند البلاغ.',
+                            style: tx(11.5, c: AppColors.amber, h: 1.5)),
+                      ),
+                    ]),
                   ),
                   for (final m in msgs) ...[const SizedBox(height: 10), _bubble(m)],
                 ]);
@@ -389,6 +443,95 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ]),
       ),
+    );
+  }
+}
+
+// ───────────────── الدعم الفني وطلباتي ─────────────────
+
+final ticketsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) {
+  ref.watch(notificationsProvider);
+  return Api.myTickets();
+});
+
+/// نافذة طلب جديد للدعم (تُستخدم أيضاً لطلب تعديل السجل التجاري)
+Future<bool> openTicketSheet(BuildContext context, {String kind = 'general', String subject = '', String hint = 'اكتب طلبك بالتفصيل', String? prefix}) async {
+  var sub = subject, body = '';
+  final ok = await showAppSheet<bool>(
+    context,
+    VCol(gap: 12, [
+      Text(subject.isEmpty ? 'طلب جديد للدعم' : subject, style: tx(18, w: w6)),
+      if (subject.isEmpty) AppField(hint: 'عنوان الطلب', fill: AppColors.bg, onChanged: (v) => sub = v),
+      AppField(hint: hint, area: true, fill: AppColors.bg, onChanged: (v) => body = v),
+      AppButton('إرسال الطلب', icon: LucideIcons.send, onTap: () async {
+        if (sub.trim().isEmpty || body.trim().isEmpty) return showToast(context, 'اكتب تفاصيل الطلب');
+        final done = await run(context, () => Api.createTicket(kind: kind, subject: sub.trim(), body: '${prefix ?? ''}${body.trim()}'),
+            success: 'وصل طلبك للدعم — تقدر تتابعه من «الدعم والمساعدة»');
+        if (done && context.mounted) Navigator.pop(context, true);
+      }),
+    ]),
+  );
+  return ok == true;
+}
+
+class SupportScreen extends ConsumerWidget {
+  const SupportScreen({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final v = ref.watch(ticketsProvider);
+    (String, Color, Color) st(String s) => switch (s) {
+          'done' => ('تم التنفيذ', AppColors.teal, AppColors.tealBg),
+          'rejected' => ('مرفوض', AppColors.red, const Color(0xFFFBE5E2)),
+          'in_progress' => ('قيد المعالجة', AppColors.amber, AppColors.amberBg),
+          _ => ('مفتوح', AppColors.pri, AppColors.pink),
+        };
+    return AppPage(
+      header: const AppHeader(title: 'الدعم والمساعدة'),
+      children: [
+        AppCard(
+          child: Row(children: [
+            const IconSquare(LucideIcons.headphones, size: 46),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('نخدمك بكل سرور', style: tx(16, w: w6)),
+                Text('أرسل طلبك وتابع حالته هنا، أو راسلنا: support@qitaat.app', style: tx(12, c: AppColors.mute)),
+              ]),
+            ),
+          ]),
+        ),
+        AppButton('طلب جديد', icon: LucideIcons.plus, iconFirst: true, onTap: () async {
+          if (await openTicketSheet(context)) ref.invalidate(ticketsProvider);
+        }),
+        Text('طلباتي', style: tx(17, w: w6)),
+        AsyncBody<List<Map<String, dynamic>>>(
+          v,
+          (list) => list.isEmpty
+              ? Padding(padding: const EdgeInsets.symmetric(vertical: 24), child: Center(child: Text('ما عندك طلبات للدعم', style: tx(14, c: AppColors.mute))))
+              : VCol(gap: 10, [
+                  for (final t in list)
+                    AppCard(
+                      child: VCol(gap: 6, [
+                        Row(children: [
+                          Expanded(child: Text('${t['subject']}', style: tx(15, w: w6))),
+                          Builder(builder: (_) {
+                            final (l, c, b) = st('${t['status']}');
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(color: b, borderRadius: BorderRadius.circular(999)),
+                              child: Text(l, style: tx(12, w: w5, c: c)),
+                            );
+                          }),
+                        ]),
+                        if ((t['body'] ?? '').toString().isNotEmpty) Text('${t['body']}', style: tx(13, c: AppColors.ink2)),
+                        if ((t['admin_note'] ?? '').toString().isNotEmpty) Text('رد الدعم: ${t['admin_note']}', style: tx(13, w: w5, c: AppColors.teal)),
+                        Text(fmtDate(DateTime.tryParse('${t['created_at']}')?.toLocal()), style: tx(11, c: AppColors.mute)),
+                      ]),
+                    ),
+                ]),
+          onRetry: () => ref.invalidate(ticketsProvider),
+        ),
+      ],
     );
   }
 }

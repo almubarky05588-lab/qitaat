@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../app/state.dart';
 import '../core/media.dart';
+import '../core/product_widgets.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
 import '../data/api.dart';
@@ -281,16 +282,20 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
               ),
               for (final o in orders)
                 AppCard(
-                  child: Row(children: [
-                    PartThumb(width: 76, height: 76, radius: 14, imageUrl: o.image),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(o.title, style: tx(16, w: w5)),
-                        Text('${o.condition ?? ''} · المورد: ${o.seller?.displayName ?? ''}', style: tx(13, c: AppColors.mute)),
-                        Text(fmtMoney(o.subtotal), style: tx(17, w: w6, c: AppColors.teal)),
-                      ]),
-                    ),
+                  child: VCol(gap: 12, [
+                    Row(children: [
+                      PartThumb(width: 76, height: 76, radius: 14, imageUrl: o.image),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(o.title, style: tx(16, w: w5)),
+                          Text('${o.items.isEmpty ? '${o.condition ?? ''} · ' : ''}المورد: ${o.seller?.displayName ?? ''}', style: tx(13, c: AppColors.mute)),
+                          Text(fmtMoney(o.subtotal), style: tx(17, w: w6, c: AppColors.teal)),
+                        ]),
+                      ),
+                    ]),
+                    // مراجعة البنود قبل الدفع: ما سيشتريه العميل وما لا يشمله العرض
+                    if (o.items.isNotEmpty) OfferItemsTable(o.items),
                   ]),
                 ),
               AppCard(
@@ -452,7 +457,13 @@ class InvoiceScreen extends ConsumerWidget {
                     child: Column(children: [
                       row('الصنف', 'الكمية', 'المبلغ', head: true),
                       const HLine(color: Color(0xFFE6D9C8)),
-                      row('${o.title}${o.condition == null ? '' : ' · ${o.condition}'}', '${o.quantity}', o.subtotal.toStringAsFixed(2)),
+                      if (o.items.isEmpty)
+                        row('${o.title}${o.condition == null ? '' : ' · ${o.condition}'}', '${o.quantity}', o.subtotal.toStringAsFixed(2))
+                      else
+                        for (final (k, e) in o.items.where((e) => e.available).indexed) ...[
+                          if (k > 0) const HLine(color: Color(0xFFE6D9C8)),
+                          row('${e.name} · ${e.type} · ${e.condition}', '${e.qty}', e.total.toStringAsFixed(2)),
+                        ],
                       const HLine(color: Color(0xFFE6D9C8)),
                       row('رسوم الشحن', '1', o.shipping.toStringAsFixed(2)),
                     ]),

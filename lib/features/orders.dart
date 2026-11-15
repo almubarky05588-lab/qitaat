@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../app/state.dart';
 import '../core/media.dart';
+import '../core/product_widgets.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
 import '../data/api.dart';
@@ -267,11 +268,12 @@ class OrderDetailsScreen extends ConsumerWidget {
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(o.title, style: tx(15, w: w5)),
-                      Text('${o.condition ?? ''} · الكمية ${o.quantity}', style: tx(12, c: AppColors.mute)),
+                      Text(o.items.isEmpty ? '${o.condition ?? ''} · الكمية ${o.quantity}' : '${o.items.where((e) => e.available).length} قطع', style: tx(12, c: AppColors.mute)),
                       Text(fmtMoney(o.subtotal), style: tx(16, w: w6, c: AppColors.teal)),
                     ]),
                   ),
                 ]),
+                if (o.items.isNotEmpty) OfferItemsTable(o.items),
                 const HLine(),
                 KV(o.buyerId == myId ? 'البائع' : 'المشتري', (o.buyerId == myId ? o.seller : o.buyer)?.displayName ?? ''),
                 KV('رقم الطلب', ltr(o.orderNo)),
@@ -279,6 +281,8 @@ class OrderDetailsScreen extends ConsumerWidget {
                 if (o.invoiceNo != null) GestureDetector(onTap: () => context.push('/invoice/${o.id}'), child: KV('الفاتورة', ltr(o.invoiceNo!), vColor: AppColors.teal)),
               ]),
             ),
+            // كشف تسوية المورد: قيمة البيع والعمولة والصافي وموعد الإتاحة
+            if (o.sellerId == myId && o.paidAt != null && o.status != 'cancelled') SettlementCard(o),
             if (o.sellerId == myId && (o.status == 'paid' || o.status == 'preparing'))
               AppButton('صوّر القطعة واشحنها', icon: LucideIcons.camera, onTap: () => context.push('/m/document/${o.id}')),
             if (o.buyerId == myId && o.status == 'awaiting_payment')
@@ -304,6 +308,49 @@ class OrderDetailsScreen extends ConsumerWidget {
           ]);
         }, onRetry: () => ref.invalidate(orderProvider(id))),
       ],
+    );
+  }
+}
+
+/// كشف تسوية المورد لطلب واحد
+class SettlementCard extends StatelessWidget {
+  final Order o;
+  const SettlementCard(this.o, {super.key});
+  @override
+  Widget build(BuildContext context) {
+    final rate = o.commissionRate;
+    final commission = o.commission ?? 0;
+    final net = o.sellerNet ?? (o.subtotal + o.shipping - commission);
+    final label = o.payoutLabel;
+    final badge = switch (label) {
+      'متاح' => const StatusBadge.teal('متاح للتحويل', icon: LucideIcons.check),
+      'قيد التحويل' => const StatusBadge.amber('قيد التحويل', icon: LucideIcons.clock),
+      'تم التحويل' => const StatusBadge.teal('تم التحويل', icon: LucideIcons.checkCheck),
+      _ => const StatusBadge('معلّق', icon: LucideIcons.lock),
+    };
+    return AppCard(
+      child: VCol(gap: 10, [
+        Row(children: [
+          Expanded(child: Text('كشف التسوية', style: tx(16, w: w6))),
+          badge,
+        ]),
+        KV('قيمة القطع', fmtMoney2(o.subtotal)),
+        if (o.shipping > 0) KV('الشحن', fmtMoney2(o.shipping)),
+        KV('عمولة المنصة${rate != null ? ' (${rate % 1 == 0 ? rate.toInt() : rate}%)' : ''}', ltr('- ${fmtMoney2(commission)}'), vColor: AppColors.pri),
+        const HLine(),
+        KV('صافي مستحقك', fmtMoney2(net), vColor: AppColors.teal, bold: true),
+        Text(
+          switch (label) {
+            'متاح' => 'المبلغ متاح — اطلب تحويله من «الأرباح والتحويل»',
+            'قيد التحويل' => 'جاري تحويل المبلغ لحسابك البنكي',
+            'تم التحويل' => 'تم تحويل المبلغ لحسابك البنكي',
+            _ => o.availableAt != null
+                ? 'يُتاح ${fmtDate(o.availableAt)} (بعد 7 أيام عمل من الشحن)'
+                : 'المبلغ معلّق — يُتاح بعد 7 أيام عمل من تاريخ الشحن',
+          },
+          style: tx(12, c: AppColors.mute),
+        ),
+      ]),
     );
   }
 }

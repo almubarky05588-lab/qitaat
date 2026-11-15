@@ -121,7 +121,10 @@ grep -m1 "PRODUCT_BUNDLE_IDENTIFIER" ios/Runner.xcodeproj/project.pbxproj
 
 BUILD=$(( 100 + ${GITHUB_RUN_NUMBER:-1} ))
 step "بناء Flutter (رقم البناء $BUILD)"
-flutter build ios --release --no-codesign --build-number=$BUILD
+# --config-only: يجهّز Pods والإعدادات فقط؛ التجميع الفعلي يصير في الأرشفة تحت
+# (بعض المكتبات الجديدة تطلب فريق تطوير حتى مع --no-codesign)
+flutter build ios --release --config-only --build-number=$BUILD
+sed -i '' "s/DEVELOPMENT_TEAM = [A-Z0-9]*;//g" ios/Runner.xcodeproj/project.pbxproj || true
 
 step "الأرشفة (بدون توقيع — التوقيع وقت التصدير)"
 xcodebuild -quiet \

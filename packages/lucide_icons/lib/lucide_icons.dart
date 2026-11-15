@@ -115,15 +115,15 @@ class AppIconsDuo {
 }
 
 /// الطبقة الخلفية الباهتة لكل أيقونة Duotone
-const Map<int, int> _duoSecondary = {
-  0xe29d: 0xe29c,
-  0xe399: 0xe398,
-  0xe30d: 0xe30c,
-  0xe479: 0xe478,
-  0xe615: 0xe614,
-  0xe6a3: 0xe6a2,
-  0xe3f1: 0xe3ec,
-  0xe4b5: 0xe4b4,
+const Map<int, IconData> _duoSecondary = {
+  0xe29d: IconData(0xe29c, fontFamily: 'PhDuotone', fontPackage: _pkg),
+  0xe399: IconData(0xe398, fontFamily: 'PhDuotone', fontPackage: _pkg),
+  0xe30d: IconData(0xe30c, fontFamily: 'PhDuotone', fontPackage: _pkg),
+  0xe479: IconData(0xe478, fontFamily: 'PhDuotone', fontPackage: _pkg),
+  0xe615: IconData(0xe614, fontFamily: 'PhDuotone', fontPackage: _pkg),
+  0xe6a3: IconData(0xe6a2, fontFamily: 'PhDuotone', fontPackage: _pkg),
+  0xe3f1: IconData(0xe3ec, fontFamily: 'PhDuotone', fontPackage: _pkg),
+  0xe4b5: IconData(0xe4b4, fontFamily: 'PhDuotone', fontPackage: _pkg),
 };
 
 /// يرسم الأيقونة؛ لو كانت Duotone يرسم طبقتين (الخلفية بشفافية)
@@ -139,7 +139,7 @@ class PhosphorIcon extends StatelessWidget {
     final sec = icon.fontFamily == 'PhDuotone' ? _duoSecondary[icon.codePoint] : null;
     if (sec == null) return Icon(icon, size: size, color: color);
     return Stack(alignment: Alignment.center, children: [
-      Opacity(opacity: duotoneSecondaryOpacity, child: Icon(IconData(sec, fontFamily: 'PhDuotone', fontPackage: _pkg), size: size, color: color)),
+      Opacity(opacity: duotoneSecondaryOpacity, child: Icon(sec, size: size, color: color)),
       Icon(icon, size: size, color: color),
     ]);
   }

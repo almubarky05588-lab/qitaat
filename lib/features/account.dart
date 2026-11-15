@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/media.dart';
@@ -14,6 +15,7 @@ import '../core/widgets.dart';
 import '../data/api.dart';
 import '../data/mock.dart';
 import 'checkout.dart' show myOrdersProvider;
+import 'map_picker.dart';
 import 'requests.dart' show pickFromSheet;
 import 'social.dart' show openTicketSheet;
 import 'store.dart' show ProfileCover, BioAndSocials, ExpandableChips;
@@ -210,7 +212,7 @@ class AccountScreen extends ConsumerWidget {
                 ['${stats.$1}', 'متابعوني'],
               ],
               middleTop: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(LucideIcons.star, size: 16, color: Color(0xFFB9AB98)),
+                const Icon(LucideIcons.star, size: 16, color: AppColors.outline2),
                 const SizedBox(width: 4),
                 Text('جديد', style: tx(19, w: w6, h: 1.3)),
               ]),
@@ -292,6 +294,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   String holder = '', bank = '', iban = '';
   String? ibanError, savedIbanMasked;
   bool editBank = false;
+  double? lat, lng;
   String? crDoc, vatDoc;
 
   void _init(Profile p) {
@@ -308,6 +311,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     tiktok = '${p.socials['tiktok'] ?? ''}'.replaceAll('null', '');
     insta = '${p.socials['insta'] ?? ''}'.replaceAll('null', '');
     location = p.storeLocation ?? '';
+    lat = p.storeLat;
+    lng = p.storeLng;
     cr = p.storeCr ?? '';
     vat = p.storeVat ?? '';
     address = p.nationalAddress ?? '';
@@ -324,6 +329,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   Widget _section(String t) => Text(t, style: tx(16, w: w6, c: AppColors.pri));
+
+  Future<void> _pickLocation() async {
+    final p = await MapPickerScreen.open(context, lat: lat, lng: lng);
+    if (p == null || !mounted) return;
+    setState(() {
+      lat = p.latitude;
+      lng = p.longitude;
+      location = 'https://maps.google.com/?q=${p.latitude.toStringAsFixed(6)},${p.longitude.toStringAsFixed(6)}';
+    });
+  }
 
   /// السجل التجاري يُقفل بعد التوثيق، أو أثناء المراجعة، أو بعد انتهاء مهلة الـ24 ساعة من أول حفظ
   bool _crLocked(Profile p) => p.verified || p.verifyStatus == 'pending' || p.crExpired;
@@ -434,7 +449,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         ? ('متجرك موثّق ✓', AppColors.teal, AppColors.tealBg)
         : switch (p.verifyStatus) {
             'pending' => ('طلبك قيد المراجعة', AppColors.pri, AppColors.pink),
-            'rejected' => ('الطلب مرفوض${p.verifyNote != null ? ' — ${p.verifyNote}' : ''}. عدّل وأعد الإرسال', AppColors.red, const Color(0xFFFBE5E2)),
+            'rejected' => ('الطلب مرفوض${p.verifyNote != null ? ' — ${p.verifyNote}' : ''}. عدّل وأعد الإرسال', AppColors.red, AppColors.redBg),
             _ => ('غير موثّق', AppColors.ink2, AppColors.bg),
           };
     return AppCard(
@@ -501,6 +516,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'socials': {'x': _nz(x), 'snap': _nz(snap), 'tiktok': _nz(tiktok), 'insta': _nz(insta)},
         if (p.isMerchant) ...{
           'store_location': _nz(location),
+          'store_lat': lat,
+          'store_lng': lng,
           if (!_crLocked(p)) 'store_cr': _nz(latinDigits(cr)),
           if (!(p.verified || p.verifyStatus == 'pending')) 'store_vat': _nz(latinDigits(vat)),
           'receive_requests': receive,
@@ -558,7 +575,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   height: 96,
                   clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(gradient: AppColors.gradient, borderRadius: BorderRadius.circular(16)),
-                  child: p.coverUrl != null ? Image.network(p.coverUrl!, fit: BoxFit.cover) : const Icon(LucideIcons.camera, size: 28, color: AppColors.white),
+                  child: p.coverUrl != null ? Image.network(p.coverUrl!, fit: BoxFit.cover) : const Icon(LucideIcons.camera, size: 28, color: AppColors.onPri),
                 ),
                 const SizedBox(height: 8),
                 Text('تغيير صورة الغلاف', style: tx(13, w: w5, c: AppColors.teal)),
@@ -606,7 +623,26 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         ],
         if (merchant) ...[
           _section('بيانات المحل'),
-          LabeledField('موقع المحل (اختياري)', AppField(hint: 'رابط خرائط قوقل للمحل', value: location.isEmpty ? null : location, icon: LucideIcons.mapPin, onChanged: (v) => location = v)),
+          LabeledField(
+            'موقع المحل (اختياري)',
+            AppCard(
+              padding: const EdgeInsets.all(12),
+              onTap: _pickLocation,
+              child: Row(children: [
+                IconSquare(LucideIcons.mapPin, size: 42, bg: lat != null ? AppColors.tealBg : AppColors.pink, color: lat != null ? AppColors.teal : AppColors.pri),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(lat != null ? 'تم تحديد الموقع على الخريطة ✓' : 'حدّد موقع المحل على الخريطة', style: tx(14, w: w5)),
+                    Text(lat != null ? ltr('${lat!.toStringAsFixed(5)}, ${lng!.toStringAsFixed(5)}') : 'تحريك الدبوس ثم «تأكيد الموقع»', style: tx(12, c: AppColors.mute)),
+                  ]),
+                ),
+                Text(lat != null ? 'تعديل الموقع' : 'تحديد', style: tx(13, w: w5, c: AppColors.pri)),
+              ]),
+            ),
+            help: 'أو الصق رابط خرائط قوقل يدوياً تحت',
+          ),
+          AppField(key: ValueKey('loc$location'), hint: 'رابط خرائط قوقل (اختياري)', value: location.isEmpty ? null : location, icon: LucideIcons.globe, ltrText: true, onChanged: (v) => location = v),
           LabeledField(
             'السجل التجاري',
             AppField(hint: 'رقم السجل التجاري', value: cr.isEmpty ? null : cr, ltrText: true, keyboard: TextInputType.number, locked: _crLocked(p), onChanged: (v) => cr = v),
@@ -748,7 +784,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  bool notif = true, chatNotif = true, dark = false;
+  bool notif = true, chatNotif = true;
 
   Widget _val(String t) => Row(mainAxisSize: MainAxisSize.min, children: [
         Text(t, style: tx(14, c: AppColors.mute)),
@@ -805,7 +841,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           MenuEntry(LucideIcons.globe, 'اللغة', trailing: _val('العربية')),
           MenuEntry(LucideIcons.bell, 'الإشعارات', trailing: AppToggle(value: notif, onChanged: (v) => setState(() => notif = v))),
           MenuEntry(LucideIcons.messageSquare, 'إشعارات المحادثات', trailing: AppToggle(value: chatNotif, onChanged: (v) => setState(() => chatNotif = v))),
-          MenuEntry(LucideIcons.moon, 'الوضع الليلي', trailing: AppToggle(value: dark, onChanged: (v) => setState(() => dark = v))),
+          MenuEntry(LucideIcons.moon, 'الوضع الليلي', trailing: AppToggle(value: AppTheme.dark, onChanged: (v) async {
+            AppTheme.set(v);
+            try {
+              (await SharedPreferences.getInstance()).setBool('dark', v);
+            } catch (_) {}
+          })),
         ]),
         _group('الدعم', [
           MenuEntry(LucideIcons.headphones, 'الدعم والمساعدة', sub: 'طلباتك للدعم ومتابعتها', onTap: () => context.push('/support')),

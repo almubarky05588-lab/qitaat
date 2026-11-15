@@ -106,7 +106,7 @@ class CountBadge extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
         constraints: const BoxConstraints(minWidth: 18),
         decoration: BoxDecoration(color: AppColors.pri, borderRadius: BorderRadius.circular(999), border: ring ? Border.all(color: AppColors.bg, width: 2) : null),
-        child: Text(ltr(count > 9 ? '+9' : '$count'), textAlign: TextAlign.center, style: tx(10, w: w6, c: AppColors.white, h: 1.3)),
+        child: Text(ltr(count > 9 ? '+9' : '$count'), textAlign: TextAlign.center, style: tx(10, w: w6, c: AppColors.onPri, h: 1.3)),
       );
 }
 
@@ -183,7 +183,7 @@ class AppButton extends StatelessWidget {
     switch (v) {
       case BtnV.pri:
         bg = AppColors.pri;
-        fg = AppColors.white;
+        fg = AppColors.onPri;
         break;
       case BtnV.out:
         border = AppColors.pri;
@@ -194,7 +194,7 @@ class AppButton extends StatelessWidget {
         fg = AppColors.teal;
         break;
       case BtnV.white:
-        bg = AppColors.white;
+        bg = AppColors.onPri;
         fg = AppColors.pri;
         break;
       case BtnV.red:
@@ -632,7 +632,7 @@ class AppToggle extends StatelessWidget {
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(color: value ? AppColors.pri : AppColors.toggleOff, borderRadius: BorderRadius.circular(15)),
           alignment: value ? Alignment.centerLeft : Alignment.centerRight,
-          child: Container(width: 24, height: 24, decoration: const BoxDecoration(color: AppColors.white, shape: BoxShape.circle)),
+          child: Container(width: 24, height: 24, decoration: const BoxDecoration(color: AppColors.onPri, shape: BoxShape.circle)),
         ),
       );
 }
@@ -870,7 +870,7 @@ class VCol extends StatelessWidget {
 
 void showToast(BuildContext context, String msg) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(msg, style: tx(14, c: AppColors.white)),
+    content: Text(msg, style: tx(14, c: AppColors.bg)),
     backgroundColor: AppColors.ink,
     behavior: SnackBarBehavior.floating,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),

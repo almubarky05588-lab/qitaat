@@ -29,7 +29,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
           width: 28,
           height: 28,
           decoration: BoxDecoration(color: filled ? AppColors.pri : AppColors.white, shape: BoxShape.circle),
-          child: Icon(ic, size: 14, color: filled ? AppColors.white : AppColors.ink2),
+          child: Icon(ic, size: 14, color: filled ? AppColors.onPri : AppColors.ink2),
         ),
       );
 
@@ -178,7 +178,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
         width: 22,
         height: 22,
         alignment: Alignment.center,
-        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: on ? AppColors.pri : const Color(0xFFCDBFAF), width: on ? 2 : 1.5)),
+        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: on ? AppColors.pri : AppColors.outline, width: on ? 2 : 1.5)),
         child: on ? Container(width: 11, height: 11, decoration: const BoxDecoration(color: AppColors.pri, shape: BoxShape.circle)) : null,
       );
 
@@ -330,15 +330,15 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                           width: 20,
                           height: 20,
                           decoration: BoxDecoration(color: save ? AppColors.pri : AppColors.white, borderRadius: BorderRadius.circular(6), border: save ? null : Border.all(color: AppColors.chipB)),
-                          child: save ? const Icon(LucideIcons.check, size: 12, color: AppColors.white) : null,
+                          child: save ? const Icon(LucideIcons.check, size: 12, color: AppColors.onPri) : null,
                         ),
                         const SizedBox(width: 8),
                         Text('احفظ البطاقة للمرات الجاية', style: tx(13, c: AppColors.ink2)),
                       ]),
                     ),
                   ])),
-              _method('apple', 'Apple Pay', 'ادفع بلمسة', [_logo(' Pay', const Color(0xFF111111), AppColors.white)]),
-              _method('card', 'بطاقة ائتمانية', 'Visa · Mastercard', [_logo('VISA', const Color(0xFFEEF1FA), const Color(0xFF1A1F71)), _logo('MC', const Color(0xFFFDF0E6), const Color(0xFFEB001B))]),
+              _method('apple', 'Apple Pay', 'ادفع بلمسة', [_logo(' Pay', const Color(0xFF111111), AppColors.onPri)]),
+              _method('card', 'بطاقة ائتمانية', 'Visa · Mastercard', [_logo('VISA', const Color(0xFFEEF1FA), const Color(0xFF1A1F71)), _logo('MC', AppColors.pink, const Color(0xFFEB001B))]),
               _method('tabby', 'تابي', 'قسّمها على 4 دفعات بدون فوائد', [_logo('tabby', const Color(0xFF3BFFC1), const Color(0xFF111111))]),
               AppCard(
                 child: VCol(gap: 10, [
@@ -456,15 +456,15 @@ class InvoiceScreen extends ConsumerWidget {
                     decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(16)),
                     child: Column(children: [
                       row('الصنف', 'الكمية', 'المبلغ', head: true),
-                      const HLine(color: Color(0xFFE6D9C8)),
+                      const HLine(color: AppColors.chipB),
                       if (o.items.isEmpty)
                         row('${o.title}${o.condition == null ? '' : ' · ${o.condition}'}', '${o.quantity}', o.subtotal.toStringAsFixed(2))
                       else
                         for (final (k, e) in o.items.where((e) => e.available).indexed) ...[
-                          if (k > 0) const HLine(color: Color(0xFFE6D9C8)),
+                          if (k > 0) const HLine(color: AppColors.chipB),
                           row('${e.name} · ${e.type} · ${e.condition}', '${e.qty}', e.total.toStringAsFixed(2)),
                         ],
-                      const HLine(color: Color(0xFFE6D9C8)),
+                      const HLine(color: AppColors.chipB),
                       row('رسوم الشحن', '1', o.shipping.toStringAsFixed(2)),
                     ]),
                   ),
@@ -521,7 +521,7 @@ class _QrPainter extends CustomPainter {
     const n = 25;
     final cs = size.width / n;
     final ink = Paint()..color = AppColors.ink;
-    final white = Paint()..color = AppColors.white;
+    final white = Paint()..color = AppColors.onPri;
     var seed = seed0.abs() % 233280 + 7;
     double rnd() {
       seed = (seed * 9301 + 49297) % 233280;
@@ -593,9 +593,9 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
                 decoration: const BoxDecoration(gradient: AppColors.gradient),
                 padding: const EdgeInsets.all(20),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('إجمالي مشترياتك في $year', style: tx(13, c: AppColors.white.withOpacity(0.85))),
-                  Text(ltr(money(yearTotal)), style: tx(28, w: w7, c: AppColors.white, h: 1.3)),
-                  Text('${valid.length} فواتير', style: tx(13, c: AppColors.white.withOpacity(0.85))),
+                  Text('إجمالي مشترياتك في $year', style: tx(13, c: AppColors.onPri.withOpacity(0.85))),
+                  Text(ltr(money(yearTotal)), style: tx(28, w: w7, c: AppColors.onPri, h: 1.3)),
+                  Text('${valid.length} فواتير', style: tx(13, c: AppColors.onPri.withOpacity(0.85))),
                 ]),
               ),
             ),

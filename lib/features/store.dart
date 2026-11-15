@@ -45,9 +45,9 @@ class ProfileCover extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(color: Colors.black.withOpacity(0.35), borderRadius: BorderRadius.circular(999)),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(LucideIcons.camera, size: 14, color: AppColors.white),
+                  const Icon(LucideIcons.camera, size: 14, color: AppColors.onPri),
                   const SizedBox(width: 4),
-                  Text('الغلاف', style: tx(12, c: AppColors.white)),
+                  Text('الغلاف', style: tx(12, c: AppColors.onPri)),
                 ]),
               ),
             ),
@@ -148,7 +148,7 @@ class _ExpandableChipsState extends State<ExpandableChips> {
   @override
   Widget build(BuildContext context) {
     final wrap = Wrap(key: key, spacing: 8, runSpacing: 8, children: [
-      for (final b in widget.items) AppChip(b, bg: const Color(0xFFEBE1D3), noBorder: true, py: 7),
+      for (final b in widget.items) AppChip(b, bg: AppColors.line, noBorder: true, py: 7),
     ]);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       AnimatedSize(
@@ -236,6 +236,13 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
               Center(child: p.isMerchant ? const StatusBadge.teal('تاجر / مورد') : const StatusBadge('مشتري')),
               if (p.city != null) const SizedBox(height: 8),
               if (p.city != null) Center(child: MetaItem(LucideIcons.mapPin, p.city!)),
+              if ((p.storeLocation ?? '').startsWith('http'))
+                Center(
+                  child: GestureDetector(
+                    onTap: () => launchUrl(Uri.parse(p.storeLocation!), mode: LaunchMode.externalApplication),
+                    child: Padding(padding: const EdgeInsets.only(top: 6), child: Text('موقع المحل على الخريطة ←', style: tx(13, w: w5, c: AppColors.teal))),
+                  ),
+                ),
               BioAndSocials(p),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 40),
@@ -283,7 +290,7 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), shape: BoxShape.circle),
-                  child: const Icon(LucideIcons.arrowRight, size: 20, color: AppColors.white),
+                  child: const Icon(LucideIcons.arrowRight, size: 20, color: AppColors.onPri),
                 ),
               ),
             ),

@@ -307,7 +307,7 @@ class RequestSentScreen extends ConsumerWidget {
                         width: 96,
                         height: 96,
                         decoration: BoxDecoration(color: none ? AppColors.thumbIcon : AppColors.pri, shape: BoxShape.circle),
-                        child: Icon(none ? LucideIcons.clock : LucideIcons.send, size: 44, color: AppColors.white),
+                        child: Icon(none ? LucideIcons.clock : LucideIcons.send, size: 44, color: AppColors.onPri),
                       ),
                     ),
                     const SizedBox(height: 18),
@@ -603,8 +603,8 @@ class _OfferCard extends ConsumerWidget {
         if (o.items.isNotEmpty) OfferItemsTable(o.items),
         Wrap(spacing: 6, runSpacing: 6, children: [
           if (o.items.isEmpty) AppChip('الحالة: ${o.condition}', selected: true, teal: true, fs: 12, px: 10, py: 5),
-          if (o.warranty != null) AppChip('ضمان ${o.warranty}', bg: const Color(0xFFF3ECE2), noBorder: true, fs: 12, px: 10, py: 5),
-          if (o.deliveryTime != null) AppChip(o.deliveryTime!, bg: const Color(0xFFF3ECE2), noBorder: true, fs: 12, px: 10, py: 5),
+          if (o.warranty != null) AppChip('ضمان ${o.warranty}', bg: AppColors.sec, noBorder: true, fs: 12, px: 10, py: 5),
+          if (o.deliveryTime != null) AppChip(o.deliveryTime!, bg: AppColors.sec, noBorder: true, fs: 12, px: 10, py: 5),
         ]),
         if (o.note != null && o.note!.isNotEmpty) Text('«${o.note}»', style: tx(13, c: AppColors.ink2)),
         if (o.images.isNotEmpty)
@@ -668,17 +668,17 @@ class OrderStepper extends StatelessWidget {
             border: cur ? Border.all(color: AppColors.pri, width: 2) : null,
           ),
           child: done
-              ? const Icon(LucideIcons.check, size: 14, color: AppColors.white)
+              ? const Icon(LucideIcons.check, size: 14, color: AppColors.onPri)
               : (cur ? Container(width: 10, height: 10, decoration: const BoxDecoration(color: AppColors.pri, shape: BoxShape.circle)) : null),
         ),
         const SizedBox(height: 6),
-        Text(steps[i], style: tx(10, w: cur ? w6 : w4, c: cur ? AppColors.pri : (done ? AppColors.ink2 : const Color(0xFFB5A898)), h: 1.3)),
+        Text(steps[i], style: tx(10, w: cur ? w6 : w4, c: cur ? AppColors.pri : (done ? AppColors.ink2 : AppColors.outline2), h: 1.3)),
       ]));
       if (i < steps.length - 1) {
         kids.add(Expanded(
           child: Padding(
             padding: const EdgeInsets.only(top: 12),
-            child: Container(height: 2, color: i < current ? AppColors.progressDone : const Color(0xFFE6DACB)),
+            child: Container(height: 2, color: i < current ? AppColors.progressDone : AppColors.chipB),
           ),
         ));
       }

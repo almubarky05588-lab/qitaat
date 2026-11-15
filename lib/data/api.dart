@@ -603,6 +603,12 @@ class Api {
   static Future<void> updateListing(String id, Map<String, dynamic> data) => sb.from('listings').update(data).eq('id', id);
   static Future<void> deleteListing(String id) => sb.from('listings').delete().eq('id', id);
 
+  // موقع الصنف داخل المخزن (برو ماكس — خاص بالمورد)
+  static Future<String?> shelf(String listingId) async => (await sb.from('listing_shelves').select('shelf').eq('listing_id', listingId).maybeSingle())?['shelf'];
+  static Future<void> setShelf(String listingId, String? shelf) => (shelf == null || shelf.trim().isEmpty)
+      ? sb.from('listing_shelves').delete().eq('listing_id', listingId)
+      : sb.from('listing_shelves').upsert({'listing_id': listingId, 'seller_id': myId, 'shelf': shelf.trim(), 'updated_at': DateTime.now().toUtc().toIso8601String()});
+
   // تمييز الإعلانات
   static Future<Map<String, dynamic>> boostQuota() async => Map<String, dynamic>.from(await sb.rpc('boost_quota'));
   static Future<void> boostListing(String id, {DateTime? at}) =>

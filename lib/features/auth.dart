@@ -118,7 +118,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 width: 22,
                 height: 22,
                 decoration: const BoxDecoration(color: AppColors.pri, shape: BoxShape.circle),
-                child: const Icon(LucideIcons.check, size: 13, color: AppColors.white),
+                child: const Icon(LucideIcons.check, size: 13, color: AppColors.onPri),
               ),
             ),
         ]),
@@ -220,7 +220,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         borderRadius: BorderRadius.circular(7),
                         border: agree ? null : Border.all(color: AppColors.chipB),
                       ),
-                      child: agree ? const Icon(LucideIcons.check, size: 14, color: AppColors.white) : null,
+                      child: agree ? const Icon(LucideIcons.check, size: 14, color: AppColors.onPri) : null,
                     ),
                     const SizedBox(width: 10),
                     Expanded(

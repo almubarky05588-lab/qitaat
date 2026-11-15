@@ -101,29 +101,37 @@ class _PromoCarouselState extends ConsumerState<PromoCarousel> {
         : Container(
             color: b.color,
             child: Stack(children: [
-              PositionedDirectional(
-                end: -10,
-                top: 18,
-                child: PhosphorIcon(b.icon, size: 104, color: AppColors.white, duotoneSecondaryOpacity: 0.28),
-              ),
               Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(20, 18, 110, 22),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(b.title, style: tx(19, w: w7, c: AppColors.white, h: 1.35), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  if ((b.subtitle ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(b.subtitle!, style: tx(13, c: AppColors.white.withOpacity(0.88), h: 1.5), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  ],
-                  const Spacer(),
-                  if ((b.cta ?? '').isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-                      decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(999)),
-                      child: Text(b.cta!, style: tx(13, w: w6, c: b.color, h: 1.3)),
-                    ),
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(b.title, style: tx(18, w: w7, c: AppColors.white, h: 1.35), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      if ((b.subtitle ?? '').isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(b.subtitle!, style: tx(13, c: AppColors.white.withOpacity(0.85), h: 1.45), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
+                      if ((b.cta ?? '').isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(999)),
+                          child: Text(b.cta!, style: tx(13, w: w6, c: b.color, h: 1.3)),
+                        ),
+                      ],
+                    ]),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(color: AppColors.white.withOpacity(0.16), shape: BoxShape.circle),
+                    alignment: Alignment.center,
+                    child: PhosphorIcon(b.icon, size: 44, color: AppColors.white, duotoneSecondaryOpacity: 0.3),
+                  ),
                 ]),
               ),
-              const Positioned(left: 0, right: 0, bottom: 0, child: SaduPattern(color: AppColors.white, height: 8, tooth: 12, opacity: 0.16)),
+              const Positioned(left: 0, right: 0, bottom: 0, child: SaduPattern(color: AppColors.white, height: 9, tooth: 12, opacity: 0.3)),
             ]),
           );
     return GestureDetector(
@@ -140,7 +148,7 @@ class _PromoCarouselState extends ConsumerState<PromoCarousel> {
     if (page >= count) page = 0;
     return Column(children: [
       SizedBox(
-        height: 160,
+        height: 132,
         child: PageView.builder(
           controller: ctrl,
           itemCount: list.length,

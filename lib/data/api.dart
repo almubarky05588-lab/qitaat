@@ -605,7 +605,14 @@ class Api {
 
   // تمييز الإعلانات
   static Future<Map<String, dynamic>> boostQuota() async => Map<String, dynamic>.from(await sb.rpc('boost_quota'));
-  static Future<void> boostListing(String id) => sb.rpc('boost_listing', params: {'p_listing': id});
+  static Future<void> boostListing(String id, {DateTime? at}) =>
+      sb.rpc('boost_listing', params: {'p_listing': id, if (at != null) 'p_start': at.toUtc().toIso8601String()});
+
+  // قوالب عروض السعر (برو وبرو ماكس)
+  static Future<List<Map<String, dynamic>>> offerTemplates() async =>
+      List<Map<String, dynamic>>.from(await sb.from('offer_templates').select().eq('user_id', myId!).order('created_at'));
+  static Future<void> saveOfferTemplate(String name, Map<String, dynamic> data) => sb.from('offer_templates').insert({'user_id': myId, 'name': name, 'data': data});
+  static Future<void> deleteOfferTemplate(String id) => sb.from('offer_templates').delete().eq('id', id);
 
   // المفضلة والسلة
   static Future<Set<String>> favoriteIds() async {

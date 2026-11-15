@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/theme.dart';
 import '../features/account.dart';
 import '../features/auth.dart';
 import '../features/catalog.dart';

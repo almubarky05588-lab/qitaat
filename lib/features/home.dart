@@ -59,6 +59,7 @@ class HomeScreen extends ConsumerWidget {
     final listings = ref.watch(homeListingsProvider);
     final current = ref.watch(currentOrderProvider).valueOrNull;
     final unread = (ref.watch(notificationsProvider).valueOrNull ?? const []).where((n) => !n.read).length;
+    final unreadChats = ref.watch(unreadChatsProvider).valueOrNull ?? 0;
 
     return SafeArea(
       bottom: false,
@@ -75,24 +76,9 @@ class HomeScreen extends ConsumerWidget {
               Expanded(child: Text('قطعة سيارتك', style: tx(24, w: w7, c: AppColors.pri), maxLines: 1, overflow: TextOverflow.ellipsis)),
               HeaderIcon(LucideIcons.shoppingCart, size: 26, color: AppColors.ink2, onTap: () => context.push('/cart')),
               const SizedBox(width: 14),
-              HeaderIcon(LucideIcons.messageSquare, size: 26, color: AppColors.ink2, onTap: () => context.push('/chats')),
+              HeaderIcon(LucideIcons.messageSquare, size: 26, color: AppColors.ink2, badge: unreadChats, onTap: () => context.push('/chats')),
               const SizedBox(width: 14),
-              GestureDetector(
-                onTap: () => context.push('/notifications'),
-                child: Stack(clipBehavior: Clip.none, children: [
-                  const Icon(LucideIcons.bell, size: 26, color: AppColors.ink2),
-                  if (unread > 0)
-                    Positioned(
-                      left: -9,
-                      top: -8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                        decoration: BoxDecoration(color: AppColors.pri, borderRadius: BorderRadius.circular(999), border: Border.all(color: AppColors.bg, width: 2)),
-                        child: Text(ltr(unread > 9 ? '+9' : '$unread'), style: tx(10, w: w6, c: AppColors.white, h: 1.3)),
-                      ),
-                    ),
-                ]),
-              ),
+              HeaderIcon(LucideIcons.bell, size: 26, color: AppColors.ink2, badge: unread, onTap: () => context.push('/notifications')),
             ]),
           ),
           Padding(
@@ -103,7 +89,7 @@ class HomeScreen extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             child: VCol(gap: 18, [
-              const PromoCarousel(),
+              if (ref.watch(bannersProvider).valueOrNull?.isNotEmpty ?? false) const PromoCarousel(),
               if (current != null) _CurrentOrderCard(current),
               IntrinsicHeight(
                 child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

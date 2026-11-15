@@ -15,6 +15,7 @@ import '../data/api.dart';
 import '../data/mock.dart';
 import 'checkout.dart' show myOrdersProvider;
 import 'requests.dart' show pickFromSheet;
+import 'social.dart' show openTicketSheet;
 import 'store.dart' show ProfileCover, BioAndSocials, ExpandableChips;
 
 final myListingsProvider = FutureProvider<List<Listing>>((ref) {
@@ -61,6 +62,12 @@ class AccountScreen extends ConsumerWidget {
     final favs = ref.watch(favoriteIdsProvider).valueOrNull ?? {};
     final stats = ref.watch(accountStatsProvider).valueOrNull ?? (0, 0);
     final orders = ref.watch(myOrdersProvider).valueOrNull ?? const <Order>[];
+    final unreadChats = ref.watch(unreadChatsProvider).valueOrNull ?? 0;
+    final chatsTrail = Row(mainAxisSize: MainAxisSize.min, children: [
+      if (unreadChats > 0) CountBadge(unreadChats),
+      if (unreadChats > 0) const SizedBox(width: 8),
+      const Icon(LucideIcons.chevronLeft, size: 20, color: AppColors.mute),
+    ]);
 
     Widget statsCard(List<List<String>> items, {Widget? middleTop}) {
       final kids = <Widget>[];
@@ -135,9 +142,9 @@ class AccountScreen extends ConsumerWidget {
                 MenuEntry(LucideIcons.tag, 'قطع عرضتها للبيع', onTap: () => context.push('/m/listings')),
               ]),
               MenuGroup(title: 'عام', items: [
-                MenuEntry(LucideIcons.messageSquare, 'المحادثات', onTap: () => context.push('/chats')),
+                MenuEntry(LucideIcons.messageSquare, 'المحادثات', trailing: chatsTrail, onTap: () => context.push('/chats')),
                 MenuEntry(LucideIcons.bell, 'الإشعارات', onTap: () => context.push('/notifications')),
-                MenuEntry(LucideIcons.headphones, 'الدعم والمساعدة', onTap: () => showToast(context, 'تواصل معنا: support@qitaat.app')),
+                MenuEntry(LucideIcons.headphones, 'الدعم والمساعدة', onTap: () => context.push('/support')),
                 MenuEntry(LucideIcons.settings, 'الإعدادات', onTap: () => context.push('/settings')),
               ]),
               GestureDetector(
@@ -246,8 +253,8 @@ class AccountScreen extends ConsumerWidget {
                   MenuEntry(LucideIcons.award, 'باقة لولو (الاشتراك)', sub: p.planLabel, onTap: () => context.push('/m/subscription')),
                 ]),
                 MenuGroup(title: 'عام', items: [
-                  MenuEntry(LucideIcons.messageSquare, 'المحادثات', onTap: () => context.push('/chats')),
-                  MenuEntry(LucideIcons.headphones, 'الدعم والمساعدة', onTap: () => showToast(context, 'تواصل معنا: support@qitaat.app')),
+                  MenuEntry(LucideIcons.messageSquare, 'المحادثات', trailing: chatsTrail, onTap: () => context.push('/chats')),
+                  MenuEntry(LucideIcons.headphones, 'الدعم والمساعدة', onTap: () => context.push('/support')),
                   MenuEntry(LucideIcons.settings, 'الإعدادات', onTap: () => context.push('/settings')),
                 ]),
               ]),
@@ -284,6 +291,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late String name, city, bio, x, snap, tiktok, insta, location, cr, vat, address;
   String holder = '', bank = '', iban = '';
   String? ibanError, savedIbanMasked;
+  bool editBank = false;
   String? crDoc, vatDoc;
 
   void _init(Profile p) {
@@ -316,6 +324,65 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   Widget _section(String t) => Text(t, style: tx(16, w: w6, c: AppColors.pri));
+
+  /// السجل التجاري يُقفل بعد التوثيق، أو أثناء المراجعة، أو بعد انتهاء مهلة الـ24 ساعة من أول حفظ
+  bool _crLocked(Profile p) => p.verified || p.verifyStatus == 'pending' || p.crExpired;
+
+  String _crHelp(Profile p) {
+    if (p.verified) return 'متجرك موثّق — تعديل السجل يكون عن طريق الدعم الفني';
+    if (p.verifyStatus == 'pending') return 'طلب التوثيق قيد المراجعة';
+    if ((p.storeCr ?? '').isEmpty) return 'يمكنك تعديل بيانات السجل خلال 24 ساعة من أول حفظ؛ بعدها يكون التعديل بطلب من الدعم الفني';
+    if (p.crExpired) return 'انتهت مهلة التعديل (24 ساعة من أول حفظ) — اطلب التعديل من الدعم الفني';
+    final left = p.crDeadline!.difference(DateTime.now());
+    final h = left.inHours, m = left.inMinutes % 60;
+    return 'متبقي ${h > 0 ? '$h ساعة' : '$m دقيقة'} لتعديل السجل — بعدها يكون التعديل عن طريق الدعم الفني';
+  }
+
+  /// بطاقة الحساب البنكي المحفوظ مع زرّي التعديل والحذف
+  Widget _savedBank() => AppCard(
+        child: VCol(gap: 12, [
+          Row(children: [
+            const IconSquare(LucideIcons.landmark, size: 44, bg: AppColors.tealBg, color: AppColors.teal),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(holder.isEmpty ? 'الحساب البنكي' : holder, style: tx(15, w: w6)),
+                if (bank.isNotEmpty) Text(bank, style: tx(13, c: AppColors.ink2)),
+                Text(ltr(savedIbanMasked!), style: tx(13, c: AppColors.mute)),
+              ]),
+            ),
+            const StatusBadge.teal('محفوظ', icon: LucideIcons.check),
+          ]),
+          Row(children: [
+            Expanded(child: AppButton('تعديل الحساب البنكي', icon: LucideIcons.pencil, iconFirst: true, v: BtnV.out2, height: 42, fs: 13, radius: 12, onTap: () => setState(() => editBank = true))),
+            const SizedBox(width: 8),
+            Expanded(child: AppButton('حذف', icon: LucideIcons.trash2, iconFirst: true, v: BtnV.red, height: 42, fs: 13, radius: 12, onTap: _deleteBank)),
+          ]),
+        ]),
+      );
+
+  Future<void> _deleteBank() async {
+    final yes = await showAppSheet<bool>(
+      context,
+      VCol(gap: 12, [
+        Text('حذف الحساب البنكي؟', style: tx(18, w: w6)),
+        Text('ما راح نقدر نحوّل لك مستحقاتك إلا بعد ما تضيف حساب جديد. سجل العمليات السابقة يبقى محفوظ.', style: tx(14, c: AppColors.ink2)),
+        AppButton('حذف الحساب البنكي', v: BtnV.red, onTap: () => Navigator.pop(context, true)),
+        AppButton('إلغاء', v: BtnV.out2, onTap: () => Navigator.pop(context, false)),
+      ]),
+    );
+    if (yes != true || !mounted) return;
+    final ok = await run(context, Api.deletePayout, success: 'تم حذف الحساب البنكي');
+    if (!mounted || !ok) return;
+    ref.invalidate(payoutProvider);
+    setState(() {
+      savedIbanMasked = null;
+      holder = '';
+      bank = '';
+      iban = '';
+      editBank = false;
+    });
+  }
   String? _nz(String s) => s.trim().isEmpty ? null : s.trim();
 
   Future<void> _pickDoc(bool isCr) async {
@@ -434,14 +501,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'socials': {'x': _nz(x), 'snap': _nz(snap), 'tiktok': _nz(tiktok), 'insta': _nz(insta)},
         if (p.isMerchant) ...{
           'store_location': _nz(location),
-          if (!(p.verified || p.verifyStatus == 'pending')) 'store_cr': _nz(latinDigits(cr)),
+          if (!_crLocked(p)) 'store_cr': _nz(latinDigits(cr)),
           if (!(p.verified || p.verifyStatus == 'pending')) 'store_vat': _nz(latinDigits(vat)),
           'receive_requests': receive,
           'brands': brands.toList(),
           'categories': cats.toList(),
         },
       });
-      if (holder.trim().isNotEmpty || bank.isNotEmpty || ib != null) {
+      final bankOpen = savedIbanMasked == null || editBank;
+      if (bankOpen && (holder.trim().isNotEmpty || bank.isNotEmpty || ib != null)) {
+        if (savedIbanMasked == null && ib == null) throw Exception('اكتب الآيبان عشان ينحفظ الحساب البنكي');
         await Api.setPayout(holder: holder.trim(), bank: bank, iban: ib);
       }
     }, success: 'تم حفظ التعديلات');
@@ -501,7 +570,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         _section('المعلومات الأساسية'),
         LabeledField('رقم الجوال (تسجيل الدخول)', AppField(value: ltr(p.phone ?? ''), icon: LucideIcons.smartphone, locked: true)),
         LabeledField('الاسم', AppField(value: name, onChanged: (v) => name = v)),
-        LabeledField('المدينة', AppField(key: ValueKey(city), value: city.isEmpty ? null : city, hint: 'اختر مدينتك', chevron: true, onTap: () => pickFromSheet(context, 'المدينة', Mock.cities, (v) => setState(() => city = v)))),
+        LabeledField('المدينة', AppField(key: ValueKey(city), value: city.isEmpty ? null : city, hint: 'اختر مدينتك', chevron: true, onTap: () => pickFromSheet(context, 'المدينة', Mock.cities, (v) => setState(() => city = v), selected: city, subs: Mock.cityRegions))),
         LabeledField('نبذة (اختياري)', AppField(hint: 'وش يميّزك؟', value: bio.isEmpty ? null : bio, area: true, onChanged: (v) => bio = v), help: 'تظهر تحت اسمك في حسابك وملفك العام'),
         _section('حسابات التواصل (اختياري)'),
         LabeledField('تويتر / X', AppField(hint: '@username', value: x.isEmpty ? null : x, icon: LucideIcons.atSign, ltrText: true, onChanged: (v) => x = v)),
@@ -510,20 +579,47 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         LabeledField('إنستقرام', AppField(hint: '@username', value: insta.isEmpty ? null : insta, icon: LucideIcons.camera, ltrText: true, onChanged: (v) => insta = v)),
         _section('الحساب البنكي لاستلام مبالغ البيع'),
         Text(merchant ? 'لتحويل أرباح مبيعاتك' : 'مطلوب فقط إذا بعت قطعة — الشراء ما يحتاجه. بياناتك خاصة وما تظهر لأحد', style: tx(12, c: AppColors.mute)),
-        LabeledField('اسم صاحب الحساب', AppField(key: ValueKey('h$holder'), hint: 'كما هو في البنك', value: holder.isEmpty ? null : holder, onChanged: (v) => holder = v)),
-        LabeledField('البنك', AppField(key: ValueKey('bk$bank'), hint: 'اختر البنك', value: bank.isEmpty ? null : bank, chevron: true, onTap: () => pickFromSheet(context, 'البنك', Mock.banks, (v) => setState(() => bank = v)))),
-        LabeledField(
-          'الآيبان',
-          AppField(hint: 'SA00 0000 0000 0000 0000 0000', ltrText: true, onChanged: (v) {
-            iban = v;
-            if (ibanError != null) setState(() => ibanError = null);
-          }),
-          help: ibanError ?? (savedIbanMasked != null ? 'المحفوظ: $savedIbanMasked — اتركه فاضي للإبقاء عليه' : 'SA ثم 22 رقم (24 خانة) — تقدر تلصقه بالمسافات'),
-        ),
+        if (savedIbanMasked != null && !editBank)
+          _savedBank()
+        else ...[
+          LabeledField('اسم صاحب الحساب', AppField(key: ValueKey('h$holder'), hint: 'كما هو في البنك', value: holder.isEmpty ? null : holder, onChanged: (v) => holder = v)),
+          LabeledField('البنك', AppField(key: ValueKey('bk$bank'), hint: 'اختر البنك', value: bank.isEmpty ? null : bank, chevron: true, onTap: () => pickFromSheet(context, 'البنك', Mock.banks, (v) => setState(() => bank = v), selected: bank))),
+          LabeledField(
+            'الآيبان',
+            AppField(hint: 'SA00 0000 0000 0000 0000 0000', ltrText: true, onChanged: (v) {
+              iban = v;
+              if (ibanError != null) setState(() => ibanError = null);
+            }),
+            help: ibanError ?? (editBank ? 'اكتب الآيبان الجديد، أو اتركه فاضي لتغيير الاسم والبنك فقط' : 'SA ثم 22 خانة (24 خانة) — تقدر تلصقه بالمسافات'),
+          ),
+          if (editBank)
+            Center(
+              child: GestureDetector(
+                onTap: () => setState(() {
+                  editBank = false;
+                  iban = '';
+                  ibanError = null;
+                }),
+                child: Padding(padding: const EdgeInsets.all(6), child: Text('إلغاء تعديل الحساب البنكي', style: tx(13, w: w5, c: AppColors.mute))),
+              ),
+            ),
+        ],
         if (merchant) ...[
           _section('بيانات المحل'),
           LabeledField('موقع المحل (اختياري)', AppField(hint: 'رابط خرائط قوقل للمحل', value: location.isEmpty ? null : location, icon: LucideIcons.mapPin, onChanged: (v) => location = v)),
-          LabeledField('السجل التجاري', AppField(hint: 'رقم السجل التجاري', value: cr.isEmpty ? null : cr, ltrText: true, keyboard: TextInputType.number, locked: p.verified || p.verifyStatus == 'pending', onChanged: (v) => cr = v)),
+          LabeledField(
+            'السجل التجاري',
+            AppField(hint: 'رقم السجل التجاري', value: cr.isEmpty ? null : cr, ltrText: true, keyboard: TextInputType.number, locked: _crLocked(p), onChanged: (v) => cr = v),
+            help: _crHelp(p),
+          ),
+          if (p.crExpired && !(p.verifyStatus == 'pending'))
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: AppButton('طلب تعديل عبر الدعم', icon: LucideIcons.headphones, iconFirst: true, v: BtnV.out2, expand: false, radius: 999, height: 40, fs: 13, onTap: () {
+                openTicketSheet(context,
+                    kind: 'cr_edit', subject: 'طلب تعديل السجل التجاري', hint: 'اكتب رقم السجل الصحيح وسبب التعديل', prefix: 'السجل الحالي: ${p.storeCr ?? '-'}\n');
+              }),
+            ),
           LabeledField('الرقم الضريبي (إن وجد)', AppField(hint: 'الرقم الضريبي', value: vat.isEmpty ? null : vat, ltrText: true, keyboard: TextInputType.number, locked: p.verified || p.verifyStatus == 'pending', onChanged: (v) => vat = v)),
           _verifyCard(p),
           ToggleRow(title: 'أستقبل طلبات القطع من العملاء', sub: 'أوقفه لو ما تبي تصلك طلبات القطع الموجّهة لتخصصك', value: receive, onChanged: (v) => setState(() => receive = v)),
@@ -627,7 +723,7 @@ class _MyCarsScreenState extends ConsumerState<MyCarsScreen> {
                       })))),
           LabeledField('الموديل', AppField(key: ValueKey('m$model'), value: model, chevron: true, onTap: () => pickFromSheet(context, 'الموديل', Mock.modelsOf(brand), (x) => setState(() => model = x)))),
           LabeledField('سنة الصنع',
-              AppField(key: ValueKey('y$year'), value: year, chevron: true, onTap: () => pickFromSheet(context, 'سنة الصنع', [for (var y = DateTime.now().year + 1; y >= 1990; y--) '$y'], (x) => setState(() => year = x)))),
+              AppField(key: ValueKey('y$year'), value: year, chevron: true, onTap: () => pickFromSheet(context, 'سنة الصنع', Mock.years, (x) => setState(() => year = x)))),
           LabeledField('رقم الهيكل / VIN (اختياري)', AppField(hint: '17 خانة', ltrText: true, onChanged: (x) => vin = x)),
           AppButton('حفظ السيارة', onTap: () async {
             final ok = await run(context, () => Api.addCar({'brand': brand, 'model': model, 'year': int.tryParse(year), 'vin': vin.trim().isEmpty ? null : latinDigits(vin.trim()).toUpperCase()}),
@@ -660,6 +756,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const Icon(LucideIcons.chevronLeft, size: 18, color: AppColors.mute),
       ]);
 
+  Future<void> _deleteAccount(BuildContext context) async {
+    final yes = await showAppSheet<bool>(
+      context,
+      VCol(gap: 12, [
+        Text('حذف الحساب', style: tx(18, w: w6, c: AppColors.red)),
+        Text('عند الحذف:', style: tx(14, w: w5)),
+        for (final t in const [
+          'تتوقف إعلاناتك وطلباتك المفتوحة وعروضك المعلّقة',
+          'تبقى الفواتير والطلبات السابقة محفوظة لحفظ حقوق العملاء ومعالجة أي شكوى أو إرجاع',
+          'ما يمكن الحذف إذا عندك طلبات جارية أو مستحقات لم تُحوَّل بعد',
+          'ما تقدر تسجّل دخول بنفس الحساب بعد الحذف',
+        ])
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Padding(padding: EdgeInsets.only(top: 6), child: Icon(LucideIcons.info, size: 14, color: AppColors.mute)),
+            const SizedBox(width: 8),
+            Expanded(child: Text(t, style: tx(13, c: AppColors.ink2))),
+          ]),
+        const SizedBox(height: 4),
+        AppButton('تأكيد حذف الحساب', v: BtnV.red, onTap: () => Navigator.pop(context, true)),
+        AppButton('إلغاء', v: BtnV.out2, onTap: () => Navigator.pop(context, false)),
+      ]),
+    );
+    if (yes != true || !context.mounted) return;
+    final ok = await run(context, Api.deleteAccount, success: 'تم حذف حسابك');
+    if (!ok) return;
+    ref.invalidate(myProfileProvider);
+    if (context.mounted) context.go('/signup');
+  }
+
   Widget _group(String title, List<MenuEntry> items) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (title.isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(title, style: tx(13, w: w5, c: AppColors.mute))),
         MenuGroup(items: items),
@@ -683,14 +808,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           MenuEntry(LucideIcons.moon, 'الوضع الليلي', trailing: AppToggle(value: dark, onChanged: (v) => setState(() => dark = v))),
         ]),
         _group('الدعم', [
-          MenuEntry(LucideIcons.helpCircle, 'مركز المساعدة', onTap: () => showToast(context, 'قريباً')),
-          MenuEntry(LucideIcons.headphones, 'تواصل معنا', onTap: () => showToast(context, 'support@qitaat.app')),
+          MenuEntry(LucideIcons.headphones, 'الدعم والمساعدة', sub: 'طلباتك للدعم ومتابعتها', onTap: () => context.push('/support')),
           MenuEntry(LucideIcons.fileText, 'الشروط والأحكام', onTap: () => showToast(context, 'قريباً')),
           MenuEntry(LucideIcons.shieldCheck, 'سياسة الخصوصية', onTap: () => showToast(context, 'قريباً')),
         ]),
         _group('', [
           MenuEntry(LucideIcons.logOut, 'تسجيل الخروج', color: AppColors.red, onTap: () => logout(context, ref)),
-          MenuEntry(LucideIcons.trash2, 'حذف الحساب', color: AppColors.red, onTap: () => showToast(context, 'لحذف الحساب تواصل مع الدعم: support@qitaat.app')),
+          MenuEntry(LucideIcons.trash2, 'حذف الحساب', color: AppColors.red, onTap: () => _deleteAccount(context)),
         ]),
         Center(child: Text('الإصدار 2.0', style: tx(12, c: AppColors.mute))),
       ],

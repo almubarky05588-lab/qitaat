@@ -31,7 +31,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   late String q = widget.query;
   late String? brand = widget.brand;
   String? condition;
-  int sort = 0; // 0 الأحدث، 1 الأقل سعر
+  int sort = 0; // 0 الأحدث، 1 الأقل سعراً، 2 الأعلى سعراً
+  static const sortLabels = ['الأحدث', 'الأقل سعراً', 'الأعلى سعراً'];
   late Future<List<Listing>> future = _load();
 
   Future<List<Listing>> _load() => Api.listings(q: q, brand: brand);
@@ -62,6 +63,29 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
       ]),
     );
+  }
+
+  void _pickSort() {
+    showAppSheet(
+      context,
+      VCol(gap: 10, [
+        Text('ترتيب النتائج', style: tx(18, w: w6)),
+        for (var i = 0; i < sortLabels.length; i++)
+          SelectCell(sortLabels[i], selected: sort == i, onTap: () {
+            setState(() => sort = i);
+            Navigator.pop(context);
+          }),
+        Text('إعلانات «على السوم» بدون سعر ثابت تظهر بعد الإعلانات المسعّرة عند الترتيب بالسعر', style: tx(12, c: AppColors.mute)),
+      ]),
+    );
+  }
+
+  List<Listing> _sorted(List<Listing> list) {
+    if (sort == 0) return list;
+    final priced = list.where((p) => !p.auction && p.price != null).toList();
+    final rest = list.where((p) => p.auction || p.price == null).toList();
+    priced.sort((a, b) => sort == 1 ? a.price!.compareTo(b.price!) : b.price!.compareTo(a.price!));
+    return [...priced, ...rest];
   }
 
   Widget _filter(String label, {bool sel = false, VoidCallback? onTap}) =>
@@ -106,7 +130,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
               const SizedBox(width: 10),
               GestureDetector(
-                onTap: () => setState(() => sort = sort == 0 ? 1 : 0),
+                onTap: _pickSort,
                 child: Container(
                   width: 56,
                   height: 56,
@@ -124,7 +148,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       _reload();
                     })),
                 _filter(condition ?? 'الحالة', sel: condition != null, onTap: () => _pick('الحالة', Mock.sellConditions, condition, (v) => setState(() => condition = v))),
-                _filter(sort == 0 ? 'الأحدث' : 'الأقل سعر', sel: sort == 1, onTap: () => setState(() => sort = sort == 0 ? 1 : 0)),
+                _filter(sortLabels[sort], sel: sort != 0, onTap: _pickSort),
               ]),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
@@ -134,14 +158,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     if (s.hasError) return ErrorBox(s.error!, onRetry: _reload);
                     if (!s.hasData) return const Loading();
                     var list = s.data!.where((p) => condition == null || p.condition == condition).toList();
-                    if (sort == 1) list.sort((a, b) => (a.price ?? a.topBid ?? a.startPrice ?? 0).compareTo(b.price ?? b.topBid ?? b.startPrice ?? 0));
+                    list = _sorted(list);
                     return VCol(gap: 12, [
                       Row(children: [
                         Text('${list.length} نتيجة', style: tx(14, w: w5, c: AppColors.ink2)),
                         const Spacer(),
-                        Text(sort == 0 ? 'الأحدث' : 'الأقل سعر', style: tx(14, w: w5, c: AppColors.pri)),
-                        const SizedBox(width: 6),
-                        const Icon(LucideIcons.chevronDown, size: 16, color: AppColors.pri),
+                        GestureDetector(
+                          onTap: _pickSort,
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Text(sortLabels[sort], style: tx(14, w: w5, c: AppColors.pri)),
+                            const SizedBox(width: 6),
+                            const Icon(LucideIcons.chevronDown, size: 16, color: AppColors.pri),
+                          ]),
+                        ),
                       ]),
                       if (list.isEmpty)
                         EmptyBox(LucideIcons.search, 'ما لقينا قطع مطابقة — اطلبها من الموردين وتوصلك عروضهم',

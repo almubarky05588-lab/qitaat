@@ -8,7 +8,7 @@ import '../core/theme.dart';
 import '../core/widgets.dart';
 import '../data/api.dart';
 import '../data/mock.dart';
-import 'account.dart' show myListingsProvider;
+import 'account.dart' show myListingsProvider, payoutProvider;
 import 'catalog.dart' show openChat;
 import 'checkout.dart' show orderProvider;
 import 'orders.dart' show orderBadge;
@@ -83,7 +83,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   Row(mainAxisSize: MainAxisSize.min, children: [
                     const Icon(LucideIcons.clock, size: 14, color: AppColors.white),
                     const SizedBox(width: 4),
-                    Text('معلّق ${fmtMoney(n('pending'))} لين يستلم المشترين', style: tx(12, w: w5, c: AppColors.white)),
+                    Text('معلّق ${fmtMoney(n('pending'))} — يُتاح بعد 7 أيام عمل من الشحن', style: tx(12, w: w5, c: AppColors.white)),
                   ]),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   radius: 999,
@@ -264,22 +264,44 @@ class SubmitOfferScreen extends ConsumerStatefulWidget {
 
 class _SubmitOfferScreenState extends ConsumerState<SubmitOfferScreen> {
   bool inclShipping = true, busy = false;
-  String condition = 'جديد أصلي', price = '', delivery = '2-3 أيام', warranty = 'بدون ضمان', note = '';
+  String delivery = '2-3 أيام', warranty = 'بدون ضمان', note = '';
   List<String> images = [];
+  List<OfferItem>? items; // صف مستقل لكل قطعة في طلب العميل
   late Future<PartRequest?> future = Api.request(widget.id);
 
+  static const types = ['أصلي', 'تجاري'];
+  static const conds = ['جديد', 'مستعمل', 'مجدد'];
+
+  num get total => (items ?? const <OfferItem>[]).fold<num>(0, (a, e) => a + e.total);
+
+  void _set(int i, OfferItem e) => setState(() => items = [...items!]..[i] = e);
+
+  /// ملخص الحالة للعرض كاملاً (نفس النوع والحالة لكل القطع، أو «حسب كل قطعة»)
+  String get _summary {
+    final av = items!.where((e) => e.available).toList();
+    final kinds = av.map((e) => '${e.type} · ${e.condition}').toSet();
+    return kinds.length == 1 ? kinds.first : 'حسب كل قطعة';
+  }
+
   Future<void> _send() async {
-    final p = num.tryParse(price.replaceAll(',', '').trim());
-    if (p == null || p <= 0) {
-      showToast(context, 'اكتب سعرك');
+    final list = items ?? const <OfferItem>[];
+    if (list.every((e) => !e.available)) {
+      showToast(context, 'لازم تكون قطعة وحدة على الأقل متوفرة');
       return;
+    }
+    for (final e in list) {
+      if (e.available && (e.unitPrice == null || e.unitPrice! <= 0)) {
+        showToast(context, 'اكتب سعر «${e.name}» أو علّمها غير متوفرة');
+        return;
+      }
     }
     setState(() => busy = true);
     final ok = await run(context, () => Api.submitOffer({
           'request_id': widget.id,
-          'price': p,
+          'price': total,
+          'items': [for (final e in list) e.toJson()],
           'includes_shipping': inclShipping,
-          'condition': condition,
+          'condition': _summary,
           'delivery_time': delivery,
           'warranty': warranty == 'بدون ضمان' ? null : warranty,
           'note': note.trim().isEmpty ? null : note.trim(),
@@ -288,6 +310,65 @@ class _SubmitOfferScreenState extends ConsumerState<SubmitOfferScreen> {
     if (!mounted) return;
     setState(() => busy = false);
     if (ok) context.pop();
+  }
+
+  Widget _itemCard(int i) {
+    final e = items![i];
+    Widget seg(List<String> opts, String sel, ValueChanged<String> on) => Row(children: [
+          for (var k = 0; k < opts.length; k++) ...[
+            if (k > 0) const SizedBox(width: 6),
+            Expanded(child: AppChip(opts[k], selected: sel == opts[k], px: 6, py: 7, fs: 13, onTap: () => on(opts[k]))),
+          ],
+        ]);
+    return AppCard(
+      padding: const EdgeInsets.all(14),
+      border: e.available ? null : AppColors.chipB,
+      color: e.available ? AppColors.white : AppColors.sec,
+      child: VCol(gap: 10, [
+        Row(children: [
+          Expanded(child: Text(e.name, style: tx(15, w: w6, c: e.available ? AppColors.ink : AppColors.mute))),
+          Text('متوفرة', style: tx(12, c: AppColors.mute)),
+          const SizedBox(width: 6),
+          AppToggle(value: e.available, onChanged: (v) => _set(i, e.copy(available: v))),
+        ]),
+        if (!e.available)
+          Text('غير متوفرة — ما تنحسب في العرض ويشوف العميل إنها غير مشمولة', style: tx(12, c: AppColors.mute))
+        else ...[
+          Row(children: [
+            Expanded(
+              flex: 3,
+              child: AppField(
+                  hint: 'سعر الوحدة',
+                  value: e.unitPrice?.toString(),
+                  ltrText: true,
+                  fill: AppColors.bg,
+                  keyboard: TextInputType.number,
+                  onChanged: (v) {
+                    final n = num.tryParse(latinDigits(v).replaceAll(',', '').trim());
+                    _set(i, n == null ? e.copy(clearPrice: true) : e.copy(unitPrice: n));
+                  },
+                  trailing: Text('ر.س', style: tx(14, w: w5, c: AppColors.mute))),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 2,
+              child: Container(
+                height: 56,
+                decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(16)),
+                child: Row(children: [
+                  IconButton(onPressed: () => _set(i, e.copy(qty: e.qty + 1)), icon: const Icon(LucideIcons.plus, size: 18, color: AppColors.ink2)),
+                  Expanded(child: Text(ltr('${e.qty}'), textAlign: TextAlign.center, style: tx(15, w: w6))),
+                  IconButton(onPressed: e.qty > 1 ? () => _set(i, e.copy(qty: e.qty - 1)) : null, icon: const Icon(LucideIcons.minus, size: 18, color: AppColors.ink2)),
+                ]),
+              ),
+            ),
+          ]),
+          seg(types, e.type, (v) => _set(i, e.copy(type: v))),
+          seg(conds, e.condition, (v) => _set(i, e.copy(condition: v))),
+          if (e.qty > 1 && e.unitPrice != null) Text('الإجمالي: ${fmtMoney(e.total)}', style: tx(12, c: AppColors.ink2)),
+        ],
+      ]),
+    );
   }
 
   @override
@@ -322,12 +403,23 @@ class _SubmitOfferScreenState extends ConsumerState<SubmitOfferScreen> {
                     ),
                 ]),
               ),
-              LabeledField(
-                'سعرك',
-                AppField(hint: '0', ltrText: true, focus: true, keyboard: TextInputType.number, onChanged: (v) => price = v, trailing: Text('ر.س', style: tx(15, w: w5, c: AppColors.mute))),
+              Text('سعّر كل قطعة لحالها', style: tx(16, w: w6)),
+              Text('حدّد السعر والنوع والحالة لكل قطعة، أو علّمها «غير متوفرة» وكمّل باقي القطع', style: tx(12, c: AppColors.mute)),
+              for (var i = 0; i < (items ??= [for (final n in (r.parts.isEmpty ? [r.title] : r.parts)) OfferItem(n)]).length; i++) _itemCard(i),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(color: AppColors.tealBg, borderRadius: BorderRadius.circular(16)),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('إجمالي القطع المتوفرة', style: tx(14, w: w5, c: AppColors.teal)),
+                      Text('${items!.where((e) => e.available).length} من ${items!.length} قطع · قبل الشحن والضريبة', style: tx(12, c: AppColors.teal)),
+                    ]),
+                  ),
+                  Text(ltr(fmtMoney(total)), style: tx(19, w: w7, c: AppColors.teal)),
+                ]),
               ),
               ToggleRow(title: 'السعر شامل الشحن', sub: 'العميل يشوف السعر النهائي بدون مفاجآت', value: inclShipping, onChanged: (v) => setState(() => inclShipping = v)),
-              LabeledField('حالة القطعة (أصلية / مستعملة)', SelectGrid(options: Mock.sellConditions, selected: condition, onChanged: (v) => setState(() => condition = v)), required: true),
               Row(children: [
                 Expanded(
                     child: LabeledField(
@@ -369,7 +461,9 @@ class SellPartScreen extends ConsumerStatefulWidget {
 }
 
 class _SellPartScreenState extends ConsumerState<SellPartScreen> {
-  String title = '', brand = 'تويوتا', model = 'كامري', yFrom = '2020', yTo = '2023', price = '', qty = '1', desc = '';
+  String title = '', price = '', qty = '1', desc = '', status = 'active';
+  // السيارات المتوافقة (الشركة، اسم السيارة، من سنة، إلى سنة) — إعلان واحد ومخزون واحد
+  List<Fitment> fits = [const Fitment('تويوتا', model: 'كامري', from: 2020, to: 2023)];
   String? cat = 'بودي';
   String condition = 'جديد أصلي', method = 'سعر محدد', duration = '3 أيام';
   final delivery = <String>{'شحن لكل المدن', 'استلام من المحل'};
@@ -384,10 +478,10 @@ class _SellPartScreenState extends ConsumerState<SellPartScreen> {
         if (l == null || !mounted) return;
         setState(() {
           title = l.title;
-          brand = l.brand ?? brand;
-          model = l.model ?? model;
-          yFrom = '${l.yearFrom ?? yFrom}';
-          yTo = '${l.yearTo ?? yTo}';
+          status = l.status;
+          fits = l.fitments.isNotEmpty
+              ? [...l.fitments]
+              : [Fitment(l.brand ?? 'تويوتا', model: l.model, from: l.yearFrom, to: l.yearTo ?? l.yearFrom)];
           cat = l.category;
           condition = l.condition;
           method = l.auction ? 'على السوم' : 'سعر محدد';
@@ -421,14 +515,21 @@ class _SellPartScreenState extends ConsumerState<SellPartScreen> {
       showToast(context, 'اختر طريقة التسليم');
       return;
     }
+    for (final f in fits) {
+      if (f.from != null && f.to != null && f.to! < f.from!) {
+        showToast(context, '«${f.brand} ${f.model ?? ''}»: سنة النهاية لازم تكون بعد سنة البداية');
+        return;
+      }
+    }
     setState(() => busy = true);
     final days = {'يوم': 1, '3 أيام': 3, 'أسبوع': 7}[duration]!;
     final data = {
       'title': title.trim(),
-      'brand': brand,
-      'model': model,
-      'year_from': int.tryParse(yFrom),
-      'year_to': int.tryParse(yTo),
+      'brand': fits.first.brand,
+      'model': fits.first.model,
+      'year_from': fits.first.from,
+      'year_to': fits.first.to,
+      'fitments': [for (final f in fits) f.toJson()],
       'category': cat,
       'condition': condition,
       'sale_type': auction ? 'auction' : 'fixed',
@@ -440,7 +541,8 @@ class _SellPartScreenState extends ConsumerState<SellPartScreen> {
       'city': ref.read(myProfileProvider).valueOrNull?.city,
       'description': desc.trim().isEmpty ? null : desc.trim(),
       'images': images,
-      'status': draft ? 'draft' : 'active',
+      // التعديل يحافظ على حالة الإعلان؛ النشر لا يتم إلا بإجراء صريح
+      'status': draft ? 'draft' : (widget.editId != null && status != 'draft' ? status : 'active'),
     };
     final ok = await run(context, () async {
       if (widget.editId != null) {
@@ -448,7 +550,10 @@ class _SellPartScreenState extends ConsumerState<SellPartScreen> {
       } else {
         await Api.createListing(data);
       }
-    }, success: draft ? 'انحفظ كمسودة' : (widget.editId != null ? 'تم حفظ التعديلات' : 'تم نشر إعلانك'));
+    },
+        success: draft
+            ? 'انحفظ كمسودة — غير منشور للعامة، تقدر تنشره من «إعلاناتي»'
+            : (widget.editId != null && status != 'draft' ? 'تم حفظ التعديلات' : 'تم نشر إعلانك'));
     if (!mounted) return;
     setState(() => busy = false);
     if (ok) {
@@ -457,36 +562,99 @@ class _SellPartScreenState extends ConsumerState<SellPartScreen> {
     }
   }
 
+  void _setFit(int i, Fitment f) => setState(() => fits = [...fits]..[i] = f);
+
+  /// بطاقة سيارة متوافقة: الشركة ← اسم السيارة ← من سنة/إلى سنة
+  Widget _fitCard(int i, List<String> years) {
+    final f = fits[i];
+    return AppCard(
+      padding: const EdgeInsets.all(12),
+      color: AppColors.sec,
+      child: VCol(gap: 10, [
+        Row(children: [
+          Text('سيارة ${i + 1}', style: tx(13, w: w6, c: AppColors.ink2)),
+          const Spacer(),
+          if (fits.length > 1)
+            GestureDetector(
+              onTap: () => setState(() => fits = [...fits]..removeAt(i)),
+              child: Row(children: [
+                const Icon(LucideIcons.trash2, size: 16, color: AppColors.red),
+                const SizedBox(width: 4),
+                Text('حذف', style: tx(13, w: w5, c: AppColors.red)),
+              ]),
+            ),
+        ]),
+        Row(children: [
+          Expanded(
+            child: AppField(
+                key: ValueKey('b$i${f.brand}'),
+                value: f.brand,
+                chevron: true,
+                onTap: () => pickFromSheet(context, 'الشركة', Mock.allBrands, (v) => _setFit(i, Fitment(v, model: Mock.modelsOf(v).first, from: f.from, to: f.to)), selected: f.brand)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: AppField(
+                key: ValueKey('m$i${f.model}'),
+                value: f.model,
+                hint: 'اسم السيارة',
+                chevron: true,
+                onTap: () => pickFromSheet(context, 'اسم السيارة', Mock.modelsOf(f.brand), (v) => _setFit(i, Fitment(f.brand, model: v, from: f.from, to: f.to)), selected: f.model)),
+          ),
+        ]),
+        Row(children: [
+          Expanded(
+            child: AppField(
+                key: ValueKey('f$i${f.from}'),
+                value: f.from == null ? null : 'من ${f.from}',
+                hint: 'من سنة',
+                chevron: true,
+                onTap: () => pickFromSheet(context, 'من سنة', years, (v) {
+                      final y = int.parse(v);
+                      _setFit(i, Fitment(f.brand, model: f.model, from: y, to: f.to == null || f.to! < y ? y : f.to));
+                    }, selected: f.from?.toString())),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: AppField(
+                key: ValueKey('t$i${f.to}'),
+                value: f.to == null ? null : 'إلى ${f.to}',
+                hint: 'إلى سنة',
+                chevron: true,
+                onTap: () => pickFromSheet(context, 'إلى سنة', f.from == null ? years : years.where((y) => int.parse(y) >= f.from!).toList(),
+                    (v) => _setFit(i, Fitment(f.brand, model: f.model, from: f.from, to: int.parse(v))), selected: f.to?.toString())),
+          ),
+        ]),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auction = method == 'على السوم';
     if (!loaded) return const Scaffold(backgroundColor: AppColors.bg, body: Loading());
-    final years = [for (var y = DateTime.now().year + 1; y >= 1990; y--) '$y'];
+    final years = Mock.years;
     return AppPage(
       header: AppHeader(title: widget.editId != null ? 'تعديل الإعلان' : 'أبيع قطعة'),
       children: [
         LabeledField('صور القطعة', PhotoStrip(urls: images, onChanged: (v) => setState(() => images = v)), help: 'أضف حتى 8 صور — الصورة الأولى تكون الغلاف'),
         LabeledField('اسم القطعة', AppField(hint: 'مثال: صدام أمامي', value: title.isEmpty ? null : title, onChanged: (v) => title = v)),
-        Row(children: [
-          Expanded(
-              child: LabeledField(
-                  'الماركة',
-                  AppField(
-                      key: ValueKey('b$brand'),
-                      value: brand,
-                      chevron: true,
-                      onTap: () => pickFromSheet(context, 'الماركة', Mock.allBrands, (v) => setState(() {
-                            brand = v;
-                            model = Mock.modelsOf(v).first;
-                          }))))),
-          const SizedBox(width: 10),
-          Expanded(child: LabeledField('الموديل', AppField(key: ValueKey('m$model'), value: model, chevron: true, onTap: () => pickFromSheet(context, 'الموديل', Mock.modelsOf(brand), (v) => setState(() => model = v))))),
-        ]),
-        Row(children: [
-          Expanded(child: LabeledField('من سنة', AppField(key: ValueKey('f$yFrom'), value: yFrom, chevron: true, onTap: () => pickFromSheet(context, 'من سنة', years, (v) => setState(() => yFrom = v))))),
-          const SizedBox(width: 10),
-          Expanded(child: LabeledField('إلى سنة', AppField(key: ValueKey('t$yTo'), value: yTo, chevron: true, onTap: () => pickFromSheet(context, 'إلى سنة', years, (v) => setState(() => yTo = v))))),
-        ]),
+        LabeledField(
+          'السيارات المتوافقة',
+          VCol(gap: 12, [
+            for (var i = 0; i < fits.length; i++) _fitCard(i, years),
+            GestureDetector(
+              onTap: () => setState(() => fits = [...fits, Fitment(fits.last.brand, model: Mock.modelsOf(fits.last.brand).first, from: fits.last.from, to: fits.last.to)]),
+              child: Row(children: [
+                const Icon(LucideIcons.plus, size: 18, color: AppColors.teal),
+                const SizedBox(width: 6),
+                Text('أضف سيارة متوافقة', style: tx(14, w: w5, c: AppColors.teal)),
+              ]),
+            ),
+          ]),
+          required: true,
+          help: 'مثال: كامري 2018–2025 وراف فور 2018–2025. تأكيد التوافق مسؤولية البائع',
+        ),
         LabeledField('التصنيف', ChipWrap(Mock.categories, selected: {if (cat != null) cat!}, onTap: (c) => setState(() => cat = cat == c ? null : c))),
         LabeledField('حالة القطعة (أصلية / مستعملة)', SelectGrid(options: Mock.sellConditions, selected: condition, onChanged: (v) => setState(() => condition = v)), required: true),
         LabeledField(
@@ -536,8 +704,14 @@ class _SellPartScreenState extends ConsumerState<SellPartScreen> {
         LabeledField('الوصف', AppField(hint: 'اكتب تفاصيل القطعة، حالتها، وأي ملاحظات...', value: desc.isEmpty ? null : desc, area: true, onChanged: (v) => desc = v)),
         busy
             ? const SizedBox(height: 54, child: Center(child: CircularProgressIndicator(color: AppColors.pri)))
-            : AppButton(widget.editId != null ? 'حفظ التعديلات' : 'انشر الإعلان', icon: LucideIcons.check, onTap: _publish),
-        if (widget.editId == null) Center(child: GestureDetector(onTap: () => _publish(draft: true), child: Text('حفظ كمسودة', style: tx(14, w: w5, c: AppColors.teal)))),
+            : AppButton(widget.editId != null && status != 'draft' ? 'حفظ التعديلات' : 'انشر الإعلان', icon: LucideIcons.check, onTap: _publish),
+        if (widget.editId == null || status == 'draft')
+          Center(
+            child: GestureDetector(
+              onTap: () => _publish(draft: true),
+              child: Padding(padding: const EdgeInsets.all(6), child: Text(status == 'draft' && widget.editId != null ? 'حفظ المسودة بدون نشر' : 'حفظ كمسودة', style: tx(14, w: w5, c: AppColors.teal))),
+            ),
+          ),
       ],
     );
   }
@@ -976,16 +1150,16 @@ class _DocumentPhotosScreenState extends ConsumerState<DocumentPhotosScreen> {
 
 // ───────────────── T09 · الأرباح والتحويل ─────────────────
 
-final ibanProvider = FutureProvider<String?>((ref) => Api.iban());
+final payoutsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) => Api.myPayouts());
 
 class EarningsScreen extends ConsumerWidget {
   const EarningsScreen({super.key});
 
-  Widget _tx(String t, String d, String amt, bool pos, String st) => Container(
+  Widget _tx(String t, String d, String amt, String st, Color stColor) => Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(18)),
         child: Row(children: [
-          IconSquare(pos ? LucideIcons.arrowDown : LucideIcons.arrowUp, size: 42, iconSize: 20, radius: 12, bg: pos ? AppColors.tealBg : AppColors.pink, color: pos ? AppColors.teal : AppColors.pri),
+          const IconSquare(LucideIcons.arrowDown, size: 42, iconSize: 20, radius: 12, bg: AppColors.tealBg, color: AppColors.teal),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -994,8 +1168,8 @@ class EarningsScreen extends ConsumerWidget {
             ]),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(ltr(amt), style: tx(15, w: w6, c: pos ? AppColors.teal : AppColors.ink)),
-            Text(st, style: tx(11, c: AppColors.mute)),
+            Text(ltr(amt), style: tx(15, w: w6, c: AppColors.teal)),
+            Text(st, style: tx(11, w: w5, c: stColor)),
           ]),
         ]),
       );
@@ -1004,10 +1178,14 @@ class EarningsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(statsProvider(3650)).valueOrNull ?? const <String, dynamic>{};
     final sales = ref.watch(salesProvider).valueOrNull ?? const <Order>[];
-    final iban = ref.watch(ibanProvider).valueOrNull;
+    final payout = ref.watch(payoutProvider);
+    final acc = payout.valueOrNull;
+    final payouts = ref.watch(payoutsProvider).valueOrNull ?? const <Map<String, dynamic>>[];
     num n(String k) => num.tryParse('${s[k] ?? 0}') ?? 0;
-    final masked = iban == null || iban.length < 8 ? null : '${iban.substring(0, 4)} •••• •••• •••• ${iban.substring(iban.length - 4)}';
+    final next = DateTime.tryParse('${s['next_available_at'] ?? ''}')?.toLocal();
+    final hasBank = acc?.iban != null;
     final paidOrders = sales.where((o) => o.paidAt != null && o.status != 'cancelled').toList();
+    Future<void> refresh() async => refreshAll(ref, [statsProvider(3650), salesProvider, payoutProvider, payoutsProvider]);
     return AppPage(
       header: const AppHeader(title: 'الأرباح والتحويل'),
       children: [
@@ -1015,34 +1193,84 @@ class EarningsScreen extends ConsumerWidget {
           Text('الرصيد المتاح للتحويل', style: tx(13, c: AppColors.white.withOpacity(0.85))),
           Text(ltr(fmtMoney2(n('available'))), style: tx(32, w: w7, c: AppColors.white, h: 1.3)),
           const SizedBox(height: 6),
-          _glass(Row(children: [
+          _glass(Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Icon(LucideIcons.clock, size: 16, color: AppColors.white),
             const SizedBox(width: 8),
-            Expanded(child: Text('معلّق ${fmtMoney(n('pending'))} — يُتاح بعد تأكيد المشتري للاستلام', style: tx(12, c: AppColors.white))),
+            Expanded(
+              child: Text(
+                  'معلّق ${fmtMoney(n('pending'))} — يُتاح بعد 7 أيام عمل من تاريخ شحن كل طلب'
+                  '${next != null ? '\nأقرب إتاحة: ${fmtDate(next)}' : ''}',
+                  style: tx(12, c: AppColors.white, h: 1.6)),
+            ),
           ])),
+          if (n('in_transfer') > 0) ...[
+            const SizedBox(height: 6),
+            _glass(Row(children: [
+              const Icon(LucideIcons.landmark, size: 16, color: AppColors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text('قيد التحويل ${fmtMoney(n('in_transfer'))}', style: tx(12, c: AppColors.white))),
+            ])),
+          ],
           const SizedBox(height: 6),
         ]),
+        // الحساب البنكي المحفوظ من نفس مصدر «تعديل الملف»
         AppCard(
-          onTap: () => context.push('/edit-profile'),
+          onTap: () async {
+            await context.push('/edit-profile');
+            ref.invalidate(payoutProvider);
+          },
           child: Row(children: [
             const IconSquare(LucideIcons.landmark),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('الحساب البنكي', style: tx(15, w: w5)),
-                Text(masked == null ? 'أضف الآيبان من تعديل الملف' : ltr(masked), style: tx(13, c: masked == null ? AppColors.pri : AppColors.mute)),
-              ]),
+              child: payout.isLoading
+                  ? Text('جاري التحميل...', style: tx(13, c: AppColors.mute))
+                  : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(hasBank ? (acc!.holder ?? 'الحساب البنكي') : 'الحساب البنكي', style: tx(15, w: w5)),
+                      if (hasBank && (acc!.bank ?? '').isNotEmpty) Text(acc.bank!, style: tx(12, c: AppColors.ink2)),
+                      Text(hasBank ? ltr(acc!.masked ?? '') : 'أضف الآيبان من تعديل الملف', style: tx(13, c: hasBank ? AppColors.mute : AppColors.pri)),
+                    ]),
             ),
-            Text(masked == null ? 'إضافة' : 'تغيير', style: tx(14, w: w5, c: AppColors.pri)),
+            Text(hasBank ? 'تعديل' : 'إضافة', style: tx(14, w: w5, c: AppColors.pri)),
           ]),
         ),
-        AppButton('اطلب التحويل', icon: LucideIcons.landmark, disabled: n('available') <= 0 || masked == null, onTap: () => showToast(context, 'تم إرسال طلب التحويل — يوصلك خلال 1-3 أيام عمل')),
-        Center(child: Text('يوصلك التحويل خلال 1-3 أيام عمل · بدون رسوم', style: tx(12, c: AppColors.mute))),
+        AppButton('اطلب التحويل', icon: LucideIcons.landmark, disabled: n('available') <= 0 || !hasBank, onTap: () async {
+          if (await run(context, Api.requestPayout, success: 'وصل طلب التحويل — يوصلك خلال 1-3 أيام عمل')) refresh();
+        }),
+        Center(
+          child: Text(
+              !hasBank
+                  ? 'أضف حسابك البنكي عشان تقدر تطلب التحويل'
+                  : (n('available') <= 0 ? 'ما فيه رصيد متاح الحين — المعلّق يُتاح بعد 7 أيام عمل من الشحن' : 'يوصلك التحويل خلال 1-3 أيام عمل · بدون رسوم'),
+              textAlign: TextAlign.center,
+              style: tx(12, c: AppColors.mute)),
+        ),
+        if (payouts.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text('طلبات التحويل', style: tx(17, w: w6)),
+          for (final p in payouts)
+            _tx(
+              'تحويل ${fmtMoney(num.tryParse('${p['amount']}') ?? 0)}',
+              fmtDate(DateTime.tryParse('${p['created_at']}')?.toLocal()),
+              fmtMoney2(num.tryParse('${p['amount']}') ?? 0),
+              switch (p['status']) { 'paid' => 'تم التحويل', 'processing' => 'قيد التنفيذ', 'rejected' => 'مرفوض', _ => 'تم الطلب' },
+              p['status'] == 'paid' ? AppColors.teal : (p['status'] == 'rejected' ? AppColors.red : AppColors.amber),
+            ),
+        ],
         const SizedBox(height: 4),
         Text('سجل العمليات', style: tx(17, w: w6)),
         if (paidOrders.isEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 20), child: Center(child: Text('ما فيه عمليات للحين', style: tx(14, c: AppColors.mute)))),
         for (final o in paidOrders)
-          _tx('مبيعات طلب ${o.orderNo}', fmtDate(o.paidAt), '+${o.subtotal.toStringAsFixed(2)}', true, o.status == 'delivered' ? 'متاح' : 'معلّق'),
+          GestureDetector(
+            onTap: () => context.push('/order/${o.id}'),
+            child: _tx(
+              'مبيعات طلب ${o.orderNo}',
+              o.payoutLabel == 'معلّق' && o.availableAt != null ? 'يُتاح ${fmtDate(o.availableAt)}' : fmtDate(o.paidAt),
+              '+${(o.sellerNet ?? o.subtotal).toStringAsFixed(2)}',
+              o.payoutLabel,
+              switch (o.payoutLabel) { 'متاح' || 'تم التحويل' => AppColors.teal, 'قيد التحويل' => AppColors.amber, _ => AppColors.mute },
+            ),
+          ),
       ],
     );
   }

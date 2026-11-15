@@ -35,7 +35,14 @@ class Mock {
 
   static List<String> conditions = ['جديد أصلي', 'جديد درجة أولى', 'مستعمل', 'كليهما'];
   static List<String> sellConditions = ['جديد أصلي', 'جديد درجة أولى', 'مستعمل', 'مجدد'];
-  static List<String> cities = ['الرياض', 'جدة', 'الدمام', 'مكة', 'المدينة', 'حفر الباطن', 'أبها', 'تبوك', 'القصيم', 'الطائف', 'الخبر', 'جازان'];
+  static List<String> cities = ['أبها', 'الأحساء', 'الباحة', 'الجبيل', 'الخبر', 'الخرج', 'الدمام', 'الرياض', 'الطائف', 'القطيف', 'المدينة المنورة', 'بريدة', 'تبوك', 'جازان', 'جدة', 'حائل', 'حفر الباطن', 'خميس مشيط', 'سكاكا', 'عرعر', 'عنيزة', 'مكة المكرمة', 'نجران', 'ينبع'];
+
+  /// منطقة كل مدينة (تُحمَّل من القاعدة) — تظهر بجانب المدينة في نافذة الاختيار
+  static Map<String, String> cityRegions = {};
+
+  /// سنوات الصنع الموحّدة في كل الشاشات: من 2027 نزولاً إلى 1930
+  static const int yearMin = 1930, yearMax = 2027;
+  static List<String> get years => [for (var y = DateTime.now().year + 1 > yearMax ? DateTime.now().year + 1 : yearMax; y >= yearMin; y--) '$y'];
   static List<String> carriers = ['سمسا', 'أرامكس', 'ناقل', 'البريد السعودي', 'DHL', 'توصيل بنفسي'];
   static List<String> banks = [
     'البنك الأهلي السعودي', 'مصرف الراجحي', 'بنك الرياض', 'البنك السعودي البريطاني (ساب)', 'البنك السعودي الفرنسي', 'البنك العربي الوطني',
@@ -80,7 +87,12 @@ class Mock {
         conditions = [...cond.where((x) => x != 'مجدد'), 'كليهما'];
       }
       final ci = of('city');
-      if (ci.isNotEmpty) cities = ci;
+      if (ci.isNotEmpty) {
+        cities = ci;
+        cityRegions = {
+          for (final r in rows.where((r) => r['kind'] == 'city' && r['hint'] != null)) '${r['value']}': '${r['hint']}',
+        };
+      }
       final ca = of('carrier');
       if (ca.isNotEmpty) carriers = ca;
       final m = <String, List<String>>{};

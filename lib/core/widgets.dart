@@ -84,10 +84,30 @@ class HeaderIcon extends StatelessWidget {
   final VoidCallback? onTap;
   final double size;
   final Color color;
-  const HeaderIcon(this.icon, {super.key, this.onTap, this.size = 22, this.color = AppColors.ink});
+  final int badge;
+  const HeaderIcon(this.icon, {super.key, this.onTap, this.size = 22, this.color = AppColors.ink, this.badge = 0});
   @override
-  Widget build(BuildContext context) =>
-      GestureDetector(onTap: onTap, child: Icon(icon, size: size, color: color));
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Stack(clipBehavior: Clip.none, children: [
+          Icon(icon, size: size, color: color),
+          if (badge > 0) Positioned(left: -9, top: -8, child: CountBadge(badge, ring: true)),
+        ]),
+      );
+}
+
+/// دائرة العدد الأحمر (غير المقروء)
+class CountBadge extends StatelessWidget {
+  final int count;
+  final bool ring;
+  const CountBadge(this.count, {super.key, this.ring = false});
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        constraints: const BoxConstraints(minWidth: 18),
+        decoration: BoxDecoration(color: AppColors.pri, borderRadius: BorderRadius.circular(999), border: ring ? Border.all(color: AppColors.bg, width: 2) : null),
+        child: Text(ltr(count > 9 ? '+9' : '$count'), textAlign: TextAlign.center, style: tx(10, w: w6, c: AppColors.white, h: 1.3)),
+      );
 }
 
 /// شاشة بقائمة قابلة للتمرير + هيدر اختياري + شريط سفلي اختياري
@@ -243,8 +263,22 @@ class AppField extends StatelessWidget {
   final TextInputType? keyboard;
   final VoidCallback? onTap;
   final ValueChanged<String>? onChanged;
+  final Color? fill;
   const AppField(
-      {super.key, this.hint = '', this.value, this.icon, this.chevron = false, this.locked = false, this.area = false, this.ltrText = false, this.focus = false, this.trailing, this.keyboard, this.onTap, this.onChanged});
+      {super.key,
+      this.hint = '',
+      this.value,
+      this.icon,
+      this.chevron = false,
+      this.locked = false,
+      this.area = false,
+      this.ltrText = false,
+      this.focus = false,
+      this.trailing,
+      this.keyboard,
+      this.onTap,
+      this.onChanged,
+      this.fill});
 
   @override
   Widget build(BuildContext context) {
@@ -253,7 +287,7 @@ class AppField extends StatelessWidget {
       height: area ? 110 : 56,
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: area ? 6 : 0),
       decoration: BoxDecoration(
-        color: locked ? AppColors.beige : AppColors.white,
+        color: locked ? AppColors.beige : (fill ?? AppColors.white),
         borderRadius: BorderRadius.circular(16),
         border: locked
             ? Border.all(color: AppColors.lockedB)

@@ -1,6 +1,6 @@
 name: lucide_icons
-description: طبقة توافق محلية — نفس أسماء الأيقونات المستخدمة في التطبيق، مبنية الآن على مكتبة Phosphor.
-version: 2.0.0
+description: طبقة توافق محلية — نفس أسماء الأيقونات المستخدمة في التطبيق، برسومات Phosphor (MIT) مدمجة كخطوط.
+version: 2.0.1
 publish_to: "none"
 
 environment:
@@ -9,4 +9,18 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  phosphor_flutter: ^2.1.0
+
+flutter:
+  fonts:
+    - family: PhRegular
+      fonts:
+        - asset: fonts/PhRegular.ttf
+    - family: PhFill
+      fonts:
+        - asset: fonts/PhFill.ttf
+    - family: PhBold
+      fonts:
+        - asset: fonts/PhBold.ttf
+    - family: PhDuotone
+      fonts:
+        - asset: fonts/PhDuotone.ttf

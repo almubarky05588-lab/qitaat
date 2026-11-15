@@ -10,6 +10,8 @@ import '../core/theme.dart';
 import '../core/widgets.dart';
 import '../data/api.dart';
 import '../data/mock.dart';
+import 'banners.dart';
+import 'merchant.dart' show customerRequestsProvider;
 
 final homeListingsProvider = FutureProvider<List<Listing>>((ref) => Api.listings(limit: 3));
 
@@ -36,32 +38,33 @@ final offersCountProvider = FutureProvider<int>((ref) async {
   return reqs.where((r) => r.isOpen).fold<int>(0, (a, r) => a + r.liveOffers.where((o) => o.status == 'pending').length);
 });
 
+/// رقم التنبيه على تبويب «طلبات»: المشتري = عروض جديدة على طلباته المفتوحة — التاجر = طلبات عملاء جديدة ما قدّم عليها
+final requestsBadgeProvider = FutureProvider<int>((ref) async {
+  ref.watch(authProvider);
+  if (myId == null) return 0;
+  if (ref.watch(roleProvider) == UserRole.merchant) {
+    final all = await ref.watch(customerRequestsProvider.future);
+    return all.where((r) => r.isOpen && !r.offers.any((o) => o.supplierId == myId)).length;
+  }
+  return ref.watch(offersCountProvider.future);
+});
+
 /// 04 · الرئيسية
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
-
-  String _statusLabel(Order o) => switch (o.status) {
-        'awaiting_payment' => (o.payDeadline != null && o.payDeadline!.isBefore(DateTime.now())) ? 'انتهت مهلة الدفع' : 'بانتظار الدفع',
-        'paid' => 'تم الدفع',
-        'preparing' => 'جاري التجهيز',
-        'shipped' => 'في الطريق',
-        _ => '',
-      };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final favs = ref.watch(favoriteIdsProvider).valueOrNull ?? {};
     final listings = ref.watch(homeListingsProvider);
     final current = ref.watch(currentOrderProvider).valueOrNull;
-    final offers = ref.watch(offersCountProvider).valueOrNull ?? 0;
     final unread = (ref.watch(notificationsProvider).valueOrNull ?? const []).where((n) => !n.read).length;
-    final merchant = ref.watch(roleProvider) == UserRole.merchant;
 
     return SafeArea(
       bottom: false,
       child: RefreshIndicator(
         color: AppColors.pri,
-        onRefresh: () async => refreshAll(ref, [homeListingsProvider, currentOrderProvider, offersCountProvider, favoriteIdsProvider]),
+        onRefresh: () async => refreshAll(ref, [homeListingsProvider, currentOrderProvider, offersCountProvider, requestsBadgeProvider, bannersProvider, favoriteIdsProvider]),
         child: ListView(padding: EdgeInsets.zero, children: [
           // الشريط العلوي
           Padding(
@@ -100,68 +103,13 @@ class HomeScreen extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             child: VCol(gap: 18, [
-              VCol(gap: 10, cross: CrossAxisAlignment.start, [
-                Text('وش عندي الآن؟', style: tx(17, w: w6)),
-                GestureDetector(
-                  onTap: () => merchant ? context.push('/m/sales') : context.go('/requests'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                    decoration: BoxDecoration(color: AppColors.sage, borderRadius: BorderRadius.circular(999), border: Border.all(color: AppColors.sageB)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(LucideIcons.checkCircle, size: 20, color: AppColors.teal),
-                      const SizedBox(width: 8),
-                      Text('$offers', style: tx(18, w: w7, c: AppColors.teal, h: 1.2)),
-                      const SizedBox(width: 8),
-                      Text(merchant ? 'عروضك المقبولة' : 'عروض وصلتك', style: tx(14, c: AppColors.ink2, h: 1.2)),
-                    ]),
-                  ),
-                ),
-              ]),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Container(
-                  decoration: const BoxDecoration(gradient: AppColors.gradient),
-                  child: Stack(children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 22, 20, 26),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                        Text('قطعتك مو موجودة بالسوق؟', style: tx(20, w: w7, c: AppColors.white)),
-                        const SizedBox(height: 6),
-                        Text('اطلبها ويوصلك عروض من الموردين المتخصصين', style: tx(14, c: AppColors.white.withOpacity(0.85))),
-                        const SizedBox(height: 16),
-                        AppButton('اطلب قطعتك الآن', icon: LucideIcons.search, v: BtnV.white, radius: 999, height: 52, onTap: () => context.push('/request-part')),
-                      ]),
-                    ),
-                    const Positioned(left: 0, right: 0, bottom: 0, child: SaduPattern(color: AppColors.white, height: 8, tooth: 12, opacity: 0.14)),
-                  ]),
-                ),
-              ),
-              if (current != null)
-                AppCard(
-                  border: const Color(0xFFF0D5C8),
-                  child: VCol(gap: 14, [
-                    Row(children: [
-                      const Icon(LucideIcons.receipt, size: 20, color: AppColors.pri),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text('طلبك الحالي', style: tx(15, w: w5))),
-                      GestureDetector(onTap: () => context.go('/orders'), child: Text('كل مشترياتي ←', style: tx(13, w: w5, c: AppColors.pri))),
-                    ]),
-                    Wrap(spacing: 10, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                      Text(current.title, style: tx(18, w: w6)),
-                      StatusBadge(_statusLabel(current)),
-                    ]),
-                    Row(children: [
-                      Expanded(child: AppButton('التفاصيل', v: BtnV.out2, radius: 999, height: 48, fs: 14, onTap: () => context.push('/order/${current.id}'))),
-                      const SizedBox(width: 10),
-                      Expanded(child: AppButton('تتبّع الشحنة', icon: LucideIcons.truck, v: BtnV.out2, radius: 999, height: 48, fs: 14, onTap: () => context.push('/order/${current.id}'))),
-                    ]),
-                  ]),
-                ),
+              const PromoCarousel(),
+              if (current != null) _CurrentOrderCard(current),
               IntrinsicHeight(
                 child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  Expanded(child: _tile(LucideIcons.shoppingBag, 'تشتري جاهز', 'قطع معروضة الآن — أضفها للسلة', () => context.push('/search'))),
+                  Expanded(child: _tile(AppIconsDuo.shoppingBag, AppColors.pink, AppColors.pri, 'تشتري جاهز', 'قطع معروضة الآن — أضفها للسلة', () => context.push('/search'))),
                   const SizedBox(width: 12),
-                  Expanded(child: _tile(LucideIcons.send, 'تطلب من الموردين', 'ما لقيتها؟ توصلك عروض أسعار', () => context.push('/request-part'))),
+                  Expanded(child: _tile(AppIconsDuo.send, AppColors.tealBg, AppColors.teal, 'تطلب من الموردين', 'ما لقيتها؟ توصلك عروض أسعار', () => context.push('/request-part'))),
                 ]),
               ),
               Text('تصفّح حسب الماركة', style: tx(18, w: w6)),
@@ -190,18 +138,74 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _tile(IconData icon, String title, String sub, VoidCallback onTap) => GestureDetector(
+  Widget _tile(IconData icon, Color bg, Color fg, String title, String sub, VoidCallback onTap) => GestureDetector(
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
-          decoration: BoxDecoration(color: AppColors.sage, borderRadius: BorderRadius.circular(20), border: Border.all(color: AppColors.sageB)),
+          decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(20)),
           child: Column(children: [
-            Icon(icon, size: 24, color: AppColors.teal),
-            const SizedBox(height: 6),
-            Text(title, style: tx(16, w: w6), textAlign: TextAlign.center),
-            const SizedBox(height: 4),
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(15)),
+              alignment: Alignment.center,
+              child: PhosphorIcon(icon, size: 28, color: fg, duotoneSecondaryOpacity: 0.25),
+            ),
+            const SizedBox(height: 8),
+            Text(title, style: tx(15, w: w6), textAlign: TextAlign.center),
+            const SizedBox(height: 2),
             Text(sub, style: tx(11, c: AppColors.mute), textAlign: TextAlign.center),
           ]),
         ),
       );
+}
+
+/// بطاقة «طلبك الحالي»: الحالة جنب العنوان + شريط المراحل + زر واحد
+class _CurrentOrderCard extends ConsumerWidget {
+  final Order o;
+  const _CurrentOrderCard(this.o);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final expired = o.status == 'awaiting_payment' && o.payDeadline != null && o.payDeadline!.isBefore(DateTime.now());
+    final Widget badge = switch (o.status) {
+      'awaiting_payment' => expired ? const StatusBadge.grey('انتهت مهلة الدفع') : const StatusBadge('بانتظار الدفع'),
+      'paid' => const StatusBadge.amber('تم الدفع'),
+      'preparing' => const StatusBadge.amber('جاري التجهيز'),
+      'shipped' => const StatusBadge.teal('في الطريق'),
+      _ => const SizedBox(),
+    };
+    const steps = ['طلب', 'دفع', 'تجهيز', 'شحن', 'تسليم'];
+    final payNow = o.status == 'awaiting_payment' && !expired;
+    return AppCard(
+      child: VCol(gap: 12, [
+        Row(children: [
+          const Icon(LucideIcons.receipt, size: 20, color: AppColors.pri),
+          const SizedBox(width: 8),
+          Expanded(child: Text('طلبك الحالي', style: tx(14, w: w5, c: AppColors.ink2))),
+          badge,
+        ]),
+        Text(o.title, style: tx(17, w: w6), maxLines: 2, overflow: TextOverflow.ellipsis),
+        Column(children: [
+          Row(children: [
+            for (var i = 0; i < steps.length; i++) ...[
+              if (i > 0) const SizedBox(width: 4),
+              Expanded(child: Container(height: 5, decoration: BoxDecoration(color: i < o.progress ? AppColors.teal : AppColors.progressTodo, borderRadius: BorderRadius.circular(3)))),
+            ],
+          ]),
+          const SizedBox(height: 6),
+          Row(children: [
+            for (var i = 0; i < steps.length; i++)
+              Expanded(child: Text(steps[i], textAlign: TextAlign.center, style: tx(11, w: i == o.progress - 1 ? w6 : w4, c: i < o.progress ? AppColors.teal : AppColors.mute))),
+          ]),
+        ]),
+        payNow
+            ? AppButton('أكمل الدفع', icon: LucideIcons.lock, radius: 999, height: 46, fs: 14, onTap: () {
+                ref.read(checkoutOrdersProvider.notifier).state = [o.id];
+                context.push('/checkout');
+              })
+            : AppButton(expired ? 'تفاصيل الطلب' : 'تتبّع الطلب', icon: LucideIcons.truck, v: BtnV.out, radius: 999, height: 46, fs: 14, onTap: () => context.push('/order/${o.id}')),
+      ]),
+    );
+  }
 }

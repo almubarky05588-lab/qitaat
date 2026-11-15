@@ -1,6 +1,6 @@
 name: lucide_icons
-description: طبقة توافق محلية — نفس أسماء أيقونات Lucide المستخدمة في التطبيق، مبنية على lucide_icons_flutter المتوافقة مع Flutter الحالي.
-version: 1.0.0
+description: طبقة توافق محلية — نفس أسماء الأيقونات المستخدمة في التطبيق، مبنية الآن على مكتبة Phosphor.
+version: 2.0.0
 publish_to: "none"
 
 environment:
@@ -9,4 +9,4 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  lucide_icons_flutter: ">=3.0.0 <4.0.0"
+  phosphor_flutter: ^2.1.0

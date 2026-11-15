@@ -283,6 +283,10 @@ const PAGES = [
   ['requests', '🔎', 'طلبات القطع والعروض', ['super', 'support']],
   ['orders', '📦', 'الطلبات والشحن', ['super', 'support'], 'orders_open'],
   ['chats', '💬', 'المحادثات', ['super', 'support']],
+  ['reports', '🚩', 'بلاغات المحادثات', ['super', 'support'], 'reports_open'],
+  ['sec', '', 'المالية والدعم'],
+  ['payouts', '🏦', 'تحويلات الموردين', ['super'], 'payouts_pending'],
+  ['tickets', '🎧', 'طلبات الدعم', ['super', 'support'], 'tickets_open'],
   ['sec', '', 'النمو'],
   ['insights', '📈', 'ذكاء السوق', ['super', 'support']],
   ['banners', '🖼️', 'البنرات الإعلانية', ['super', 'content']],
@@ -324,7 +328,7 @@ VIEWS.dash = async (v) => {
   topActions(`<select class="in" id="days" style="width:auto">${[7, 30, 90, 365].map((x) => `<option value="${x}" ${x === days ? 'selected' : ''}>آخر ${x} يوم</option>`).join('')}</select>`);
   $('#days').onchange = (e) => { sessionStorage.setItem('days', e.target.value); route(); };
   const s = await must(sb.rpc('admin_stats', { p_days: days }));
-  BADGES = { pending_verify: s.pending_verify, orders_open: s.orders_open }; renderNav();
+  BADGES = { pending_verify: s.pending_verify, orders_open: s.orders_open, payouts_pending: s.payouts_pending, tickets_open: s.tickets_open, reports_open: s.reports_open }; renderNav();
   const daily = s.daily || [];
   const maxG = Math.max(1, ...daily.map((x) => +x.gmv));
   const maxU = Math.max(1, ...daily.map((x) => +x.users));
@@ -788,6 +792,122 @@ VIEWS.chats = async (v, p) => {
   await load();
 };
 
+
+// ───────── تحويلات الموردين (تُتاح المستحقات بعد أيام العمل المحددة من تاريخ الشحن) ─────────
+const PAYOUT_ST = { requested: ['تم الطلب', 'amber'], processing: ['قيد التنفيذ', 'amber'], paid: ['تم التحويل', 'teal'], rejected: ['مرفوض', 'red'] };
+VIEWS.payouts = async (v) => {
+  v.innerHTML = `<div class="alert teal">المورد يطلب التحويل بعد ما تُتاح مستحقاته (أيام العمل من الشحن — تتحكم فيها من الإعدادات: payout_business_days و payout_holidays). حوّل المبلغ من البنك ثم غيّر الحالة إلى «تم التحويل» مع رقم المرجع.</div>
+    <div class="filters"><select class="in" id="st" style="width:auto"><option value="open">المفتوحة</option><option value="">الكل</option><option value="paid">المحوّلة</option><option value="rejected">المرفوضة</option></select></div><div id="res"></div>`;
+  const load = async () => {
+    loading($('#res'));
+    let q = sb.from('payouts').select('*, user:profiles(id,name,phone,plan)').order('created_at', { ascending: false }).limit(300);
+    const st = $('#st').value;
+    if (st === 'open') q = q.in('status', ['requested', 'processing']); else if (st) q = q.eq('status', st);
+    const rows = await must(q);
+    $('#res').innerHTML = table([
+      ['المورد', (r) => `<b>${esc(r.user?.name || '—')}</b><span class="sub ltr">${esc(r.user?.phone || '')}</span>`],
+      ['المبلغ', (r) => `<b>${money(r.amount)}</b>`],
+      ['الحساب', (r) => `${esc(r.holder || '')}<span class="sub">${esc(r.bank || '')} · <span class="ltr">${esc(r.iban || '')}</span></span>`],
+      ['الحالة', (r) => tagOf(PAYOUT_ST, r.status)],
+      ['التاريخ', (r) => `<span class="nowrap">${dt(r.created_at)}</span>`],
+    ], rows, (r) => {
+      const b = drawer('تحويل ' + money(r.amount), `
+        <div class="field"><label>المورد</label><b>${esc(r.user?.name || '')}</b></div>
+        <div class="field"><label>الآيبان</label><div class="ltr" style="font-size:16px"><b>${esc(r.iban || '')}</b></div><small class="muted">${esc(r.holder || '')} · ${esc(r.bank || '')}</small></div>
+        <div class="field"><label>الحالة</label><select class="in" id="pSt">${Object.entries(PAYOUT_ST).map(([k, x]) => `<option value="${k}" ${k === r.status ? 'selected' : ''}>${x[0]}</option>`).join('')}</select></div>
+        <div class="field"><label>رقم المرجع البنكي</label><input class="in ltr" id="pRef" value="${esc(r.ref || '')}"></div>
+        <div class="field"><label>ملاحظة للمورد (تظهر عند الرفض)</label><input class="in" id="pNote" value="${esc(r.admin_note || '')}"></div>
+        <button class="btn" id="pSave">حفظ</button>`);
+      b.querySelector('#pSave').onclick = async () => {
+        const patch = { status: $('#pSt').value, ref: $('#pRef').value.trim() || null, admin_note: $('#pNote').value.trim() || null };
+        if (await act(() => must(sb.from('payouts').update(patch).eq('id', r.id)), 'تم الحفظ — وصل إشعار للمورد')) { log('تحديث تحويل', 'payout', r.id, patch); closeDrawer(); load(); }
+      };
+    }, 'لا توجد طلبات تحويل');
+  };
+  $('#st').onchange = load;
+  await load();
+};
+
+// ───────── طلبات الدعم (ومنها طلبات تعديل السجل التجاري بعد انتهاء المهلة) ─────────
+const TICKET_ST = { open: ['مفتوح', 'amber'], in_progress: ['قيد المعالجة', 'amber'], done: ['تم التنفيذ', 'teal'], rejected: ['مرفوض', 'red'] };
+VIEWS.tickets = async (v) => {
+  v.innerHTML = `<div class="filters"><select class="in" id="st" style="width:auto"><option value="open">المفتوحة</option><option value="">الكل</option><option value="done">المنفّذة</option></select></div><div id="res"></div>`;
+  const load = async () => {
+    loading($('#res'));
+    let q = sb.from('support_tickets').select('*, user:profiles(id,name,phone,store_cr)').order('created_at', { ascending: false }).limit(300);
+    const st = $('#st').value;
+    if (st === 'open') q = q.in('status', ['open', 'in_progress']); else if (st) q = q.eq('status', st);
+    const rows = await must(q);
+    $('#res').innerHTML = table([
+      ['الطلب', (r) => `<b>${esc(r.subject)}</b><span class="sub">${esc((r.body || '').slice(0, 90))}</span>`],
+      ['المستخدم', (r) => `${esc(r.user?.name || '—')}<span class="sub ltr">${esc(r.user?.phone || '')}</span>`],
+      ['الحالة', (r) => tagOf(TICKET_ST, r.status)],
+      ['التاريخ', (r) => `<span class="nowrap">${dt(r.created_at)}</span>`],
+    ], rows, (r) => {
+      const cr = r.kind === 'cr_edit';
+      const b = drawer(r.subject, `
+        <div class="field"><label>المستخدم</label><a href="#" id="tUser">${esc(r.user?.name || '')}</a></div>
+        <div class="field"><label>التفاصيل</label><div style="white-space:pre-wrap">${esc(r.body || '')}</div></div>
+        ${cr ? `<div class="field"><label>السجل التجاري الجديد (يُحفظ في ملف التاجر عند التنفيذ)</label><input class="in ltr" id="tCr" value="${esc(r.user?.store_cr || '')}"></div>` : ''}
+        <div class="field"><label>الحالة</label><select class="in" id="tSt">${Object.entries(TICKET_ST).map(([k, x]) => `<option value="${k}" ${k === r.status ? 'selected' : ''}>${x[0]}</option>`).join('')}</select></div>
+        <div class="field"><label>رد للمستخدم</label><input class="in" id="tNote" value="${esc(r.admin_note || '')}"></div>
+        <button class="btn" id="tSave">حفظ</button>`);
+      b.querySelector('#tUser').onclick = (e) => { e.preventDefault(); userDrawer(r.user_id, load); };
+      b.querySelector('#tSave').onclick = async () => {
+        const patch = { status: $('#tSt').value, admin_note: $('#tNote').value.trim() || null };
+        const ok = await act(async () => {
+          if (cr && patch.status === 'done') {
+            const c = $('#tCr').value.trim();
+            if (c && c !== (r.user?.store_cr || '')) await must(sb.from('profiles').update({ store_cr: c, cr_set_at: new Date().toISOString() }).eq('id', r.user_id));
+          }
+          await must(sb.from('support_tickets').update(patch).eq('id', r.id));
+        }, 'تم الحفظ — وصل إشعار للمستخدم');
+        if (ok) { log('تحديث طلب دعم', 'ticket', r.id, patch); closeDrawer(); load(); }
+      };
+    }, 'لا توجد طلبات');
+  };
+  $('#st').onchange = load;
+  await load();
+};
+
+// ───────── بلاغات المحادثات (البيع أو التحويل خارج التطبيق) ─────────
+const REPORT_ST = { open: ['جديد', 'amber'], violation: ['مخالفة مؤكدة', 'red'], dismissed: ['لا توجد مخالفة', ''] };
+VIEWS.reports = async (v) => {
+  v.innerHTML = `<div class="alert teal">راجع المحادثة قبل أي إجراء. «مخالفة مؤكدة» تضيف مخالفة على حساب الطرف المبلَّغ عنه وتنبّهه — والإيقاف قرارك من صفحة المستخدم.</div>
+    <div class="filters"><select class="in" id="st" style="width:auto"><option value="open">الجديدة</option><option value="">الكل</option><option value="violation">المخالفات المؤكدة</option></select></div><div id="res"></div>`;
+  const load = async () => {
+    loading($('#res'));
+    let q = sb.from('chat_reports').select('*, reporter:profiles!chat_reports_reporter_id_fkey(id,name), reported:profiles!chat_reports_reported_id_fkey(id,name,violations)').order('created_at', { ascending: false }).limit(300);
+    if ($('#st').value) q = q.eq('status', $('#st').value);
+    const rows = await must(q);
+    $('#res').innerHTML = table([
+      ['السبب', (r) => `<b>${esc(r.reason)}</b><span class="sub">${esc((r.details || '').slice(0, 80))}</span>`],
+      ['المبلِّغ', (r) => esc(r.reporter?.name || '—')],
+      ['المبلَّغ عنه', (r) => `${esc(r.reported?.name || '—')}${r.reported?.violations ? ` <span class="tag red">${r.reported.violations} مخالفة</span>` : ''}`],
+      ['الحالة', (r) => tagOf(REPORT_ST, r.status)],
+      ['التاريخ', (r) => `<span class="nowrap">${dt(r.created_at)}</span>`],
+    ], rows, async (r) => {
+      const b = drawer('بلاغ: ' + r.reason, ''); loading(b);
+      const msgs = await must(sb.from('messages').select('*').eq('conversation_id', r.conversation_id).order('created_at'));
+      b.innerHTML = `
+        <div class="field"><label>التفاصيل</label>${esc(r.details || '—')}</div>
+        <div class="field"><label>القرار</label><select class="in" id="rSt">${Object.entries(REPORT_ST).map(([k, x]) => `<option value="${k}" ${k === r.status ? 'selected' : ''}>${x[0]}</option>`).join('')}</select></div>
+        <div class="field"><label>ملاحظة داخلية</label><input class="in" id="rNote" value="${esc(r.admin_note || '')}"></div>
+        <div class="row" style="gap:8px;margin-bottom:14px"><button class="btn" id="rSave">حفظ القرار</button>${r.reported_id ? `<button class="btn out" id="rUser">فتح حساب المبلَّغ عنه</button>` : ''}</div>
+        <h3>المحادثة</h3>
+        ${msgs.map((m) => `<div class="msg ${m.sender_id === r.reported_id ? 'b' : ''} ${m.masked ? 'masked' : ''}">
+          <small>${esc(m.sender_id === r.reported_id ? (r.reported?.name || '') : (r.reporter?.name || ''))} · ${dt(m.created_at)}${m.masked ? ' · 🚫 حُجبت معلومات تواصل' : ''}</small>${esc(m.body || '')}</div>`).join('') || '<div class="empty">لا توجد رسائل</div>'}`;
+      b.querySelector('#rSave').onclick = async () => {
+        const patch = { status: $('#rSt').value, admin_note: $('#rNote').value.trim() || null };
+        if (await act(() => must(sb.from('chat_reports').update(patch).eq('id', r.id)), 'تم حفظ القرار')) { log('قرار بلاغ', 'report', r.id, patch); closeDrawer(); load(); }
+      };
+      const u = b.querySelector('#rUser'); if (u) u.onclick = () => userDrawer(r.reported_id, load);
+    }, 'لا توجد بلاغات 👍');
+  };
+  $('#st').onchange = load;
+  await load();
+};
+
 // ذكاء السوق
 VIEWS.insights = async (v) => {
   let days = +(sessionStorage.getItem('idays') || 30);
@@ -1051,7 +1171,7 @@ async function boot() {
   $('#meAv').textContent = (me.name || 'م')[0];
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   route();
-  sb.rpc('admin_stats', { p_days: 1 }).then(({ data }) => { if (data) { BADGES = { pending_verify: data.pending_verify, orders_open: data.orders_open }; renderNav(); } });
+  sb.rpc('admin_stats', { p_days: 1 }).then(({ data }) => { if (data) { BADGES = { pending_verify: data.pending_verify, orders_open: data.orders_open, payouts_pending: data.payouts_pending, tickets_open: data.tickets_open, reports_open: data.reports_open }; renderNav(); } });
 }
 boot();
 </script>

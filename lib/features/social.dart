@@ -59,7 +59,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 return ListView.separated(
                   padding: const EdgeInsets.only(bottom: 30),
                   itemCount: list.length,
-                  separatorBuilder: (_, __) => const HLine(color: Color(0xFFE9DCCB)),
+                  separatorBuilder: (_, __) => const HLine(color: AppColors.line),
                   itemBuilder: (_, i) {
                     final n = list[i];
                     final unread = !n.read;
@@ -145,7 +145,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
                   child: ListView.separated(
                     padding: const EdgeInsets.only(bottom: 30),
                     itemCount: list.length,
-                    separatorBuilder: (_, __) => const Padding(padding: EdgeInsetsDirectional.only(start: 84, end: 20), child: HLine(color: Color(0xFFE9DCCB))),
+                    separatorBuilder: (_, __) => const Padding(padding: EdgeInsetsDirectional.only(start: 84, end: 20), child: HLine(color: AppColors.line)),
                     itemBuilder: (_, i) {
                       final c = list[i];
                       final o = c.other;
@@ -179,7 +179,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
                                       decoration: BoxDecoration(color: AppColors.pri, borderRadius: BorderRadius.circular(999)),
-                                      child: Text('$unread', style: tx(11, w: w6, c: AppColors.white, h: 1.4)),
+                                      child: Text('$unread', style: tx(11, w: w6, c: AppColors.onPri, h: 1.4)),
                                     ),
                                 ]),
                               ]),
@@ -288,7 +288,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ),
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                Text(m.body!, style: tx(14, c: me ? AppColors.white : AppColors.ink)),
+                Text(m.body!, style: tx(14, c: me ? AppColors.onPri : AppColors.ink)),
                 if (m.masked)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
@@ -435,8 +435,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   height: 48,
                   decoration: const BoxDecoration(color: AppColors.pri, shape: BoxShape.circle),
                   child: sending
-                      ? const Padding(padding: EdgeInsets.all(14), child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.white))
-                      : const Icon(LucideIcons.send, size: 20, color: AppColors.white),
+                      ? const Padding(padding: EdgeInsets.all(14), child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onPri))
+                      : const Icon(LucideIcons.send, size: 20, color: AppColors.onPri),
                 ),
               ),
             ]),
@@ -481,7 +481,7 @@ class SupportScreen extends ConsumerWidget {
     final v = ref.watch(ticketsProvider);
     (String, Color, Color) st(String s) => switch (s) {
           'done' => ('تم التنفيذ', AppColors.teal, AppColors.tealBg),
-          'rejected' => ('مرفوض', AppColors.red, const Color(0xFFFBE5E2)),
+          'rejected' => ('مرفوض', AppColors.red, AppColors.redBg),
           'in_progress' => ('قيد المعالجة', AppColors.amber, AppColors.amberBg),
           _ => ('مفتوح', AppColors.pri, AppColors.pink),
         };

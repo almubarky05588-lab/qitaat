@@ -20,14 +20,14 @@ Widget _gradientCard({required List<Widget> children}) => ClipRRect(
         decoration: const BoxDecoration(gradient: AppColors.gradient),
         child: Stack(children: [
           Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children)),
-          const Positioned(left: 0, right: 0, bottom: 0, child: SaduPattern(color: AppColors.white, height: 8, tooth: 12, opacity: 0.14)),
+          const Positioned(left: 0, right: 0, bottom: 0, child: SaduPattern(color: AppColors.onPri, height: 8, tooth: 12, opacity: 0.14)),
         ]),
       ),
     );
 
 Widget _glass(Widget child, {EdgeInsets padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 8), double radius = 12}) => Container(
       padding: padding,
-      decoration: BoxDecoration(color: AppColors.white.withOpacity(0.16), borderRadius: BorderRadius.circular(radius)),
+      decoration: BoxDecoration(color: AppColors.onPri.withOpacity(0.16), borderRadius: BorderRadius.circular(radius)),
       child: child,
     );
 
@@ -75,15 +75,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           const dayNames = ['اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت', 'أحد'];
           return VCol(gap: 16, [
             _gradientCard(children: [
-              Text('أرباح $label', style: tx(13, c: AppColors.white.withOpacity(0.85))),
-              Text(ltr(fmtMoney(n('earnings'))), style: tx(32, w: w7, c: AppColors.white, h: 1.3)),
+              Text('أرباح $label', style: tx(13, c: AppColors.onPri.withOpacity(0.85))),
+              Text(ltr(fmtMoney(n('earnings'))), style: tx(32, w: w7, c: AppColors.onPri, h: 1.3)),
               Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: _glass(
                   Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(LucideIcons.clock, size: 14, color: AppColors.white),
+                    const Icon(LucideIcons.clock, size: 14, color: AppColors.onPri),
                     const SizedBox(width: 4),
-                    Text('معلّق ${fmtMoney(n('pending'))} — يُتاح بعد 7 أيام عمل من الشحن', style: tx(12, w: w5, c: AppColors.white)),
+                    Text('معلّق ${fmtMoney(n('pending'))} — يُتاح بعد 7 أيام عمل من الشحن', style: tx(12, w: w5, c: AppColors.onPri)),
                   ]),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   radius: 999,
@@ -93,8 +93,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               Row(children: [
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('قابل للتحويل', style: tx(12, c: AppColors.white.withOpacity(0.8))),
-                    Text(ltr(fmtMoney(n('available'))), style: tx(17, w: w6, c: AppColors.white)),
+                    Text('قابل للتحويل', style: tx(12, c: AppColors.onPri.withOpacity(0.8))),
+                    Text(ltr(fmtMoney(n('available'))), style: tx(17, w: w6, c: AppColors.onPri)),
                   ]),
                 ),
                 AppButton('تحويل للآيبان', v: BtnV.white, radius: 999, height: 42, fs: 14, expand: false, onTap: () => context.push('/m/earnings')),
@@ -126,7 +126,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
                           Container(
                             height: 6.0 + 114.0 * (maxD == 0 ? 0.0 : daily[i] / maxD),
-                            decoration: BoxDecoration(color: i == daily.length - 1 ? AppColors.pri : const Color(0xFFEBCFC2), borderRadius: BorderRadius.circular(8)),
+                            decoration: BoxDecoration(color: i == daily.length - 1 ? AppColors.pri : AppColors.pinkB, borderRadius: BorderRadius.circular(8)),
                           ),
                           const SizedBox(height: 6),
                           Text(dayNames[today.subtract(Duration(days: daily.length - 1 - i)).weekday - 1], style: tx(10, c: AppColors.mute), maxLines: 1),
@@ -537,7 +537,7 @@ class SellPartScreen extends ConsumerStatefulWidget {
 }
 
 class _SellPartScreenState extends ConsumerState<SellPartScreen> {
-  String title = '', price = '', qty = '1', desc = '', status = 'active';
+  String title = '', price = '', qty = '1', desc = '', status = 'active', shelf = '';
   // السيارات المتوافقة (الشركة، اسم السيارة، من سنة، إلى سنة) — إعلان واحد ومخزون واحد
   List<Fitment> fits = [const Fitment('تويوتا', model: 'كامري', from: 2020, to: 2023)];
   String? cat = 'بودي';
@@ -555,6 +555,9 @@ class _SellPartScreenState extends ConsumerState<SellPartScreen> {
         setState(() {
           title = l.title;
           status = l.status;
+          Api.shelf(l.id).then((v) {
+            if (mounted && v != null) setState(() => shelf = v);
+          }).catchError((_) {});
           fits = l.fitments.isNotEmpty
               ? [...l.fitments]
               : [Fitment(l.brand ?? 'تويوتا', model: l.model, from: l.yearFrom, to: l.yearTo ?? l.yearFrom)];
@@ -620,12 +623,15 @@ class _SellPartScreenState extends ConsumerState<SellPartScreen> {
       // التعديل يحافظ على حالة الإعلان؛ النشر لا يتم إلا بإجراء صريح
       'status': draft ? 'draft' : (widget.editId != null && status != 'draft' ? status : 'active'),
     };
+    final proMax = ref.read(myProfileProvider).valueOrNull?.plan == 'pro_max';
     final ok = await run(context, () async {
-      if (widget.editId != null) {
-        await Api.updateListing(widget.editId!, data);
+      var id = widget.editId;
+      if (id != null) {
+        await Api.updateListing(id, data);
       } else {
-        await Api.createListing(data);
+        id = await Api.createListing(data);
       }
+      if (proMax) await Api.setShelf(id, shelf);
     },
         success: draft
             ? 'انحفظ كمسودة — غير منشور للعامة، تقدر تنشره من «إعلاناتي»'
@@ -778,6 +784,10 @@ class _SellPartScreenState extends ConsumerState<SellPartScreen> {
           ]),
         ),
         LabeledField('الوصف', AppField(hint: 'اكتب تفاصيل القطعة، حالتها، وأي ملاحظات...', value: desc.isEmpty ? null : desc, area: true, onChanged: (v) => desc = v)),
+        if (ref.watch(myProfileProvider).valueOrNull?.plan == 'pro_max')
+          LabeledField('موقع الصنف في المخزن (اختياري)',
+              AppField(key: ValueKey('sh${shelf.isEmpty}'), hint: 'مثال: مستودع 2 · رف B4', value: shelf.isEmpty ? null : shelf, icon: LucideIcons.archive, onChanged: (v) => shelf = v),
+              help: 'خاص فيك — ما يظهر للمشترين'),
         busy
             ? const SizedBox(height: 54, child: Center(child: CircularProgressIndicator(color: AppColors.pri)))
             : AppButton(widget.editId != null && status != 'draft' ? 'حفظ التعديلات' : 'انشر الإعلان', icon: LucideIcons.check, onTap: _publish),
@@ -1134,7 +1144,7 @@ class _DocumentPhotosScreenState extends ConsumerState<DocumentPhotosScreen> {
                       width: 28,
                       height: 28,
                       decoration: BoxDecoration(color: AppColors.teal, shape: BoxShape.circle, border: Border.all(color: AppColors.white, width: 2)),
-                      child: const Icon(LucideIcons.check, size: 14, color: AppColors.white),
+                      child: const Icon(LucideIcons.check, size: 14, color: AppColors.onPri),
                     ),
                   ),
                 ])
@@ -1184,7 +1194,7 @@ class _DocumentPhotosScreenState extends ConsumerState<DocumentPhotosScreen> {
           Row(children: [
             for (var i = 0; i < 4; i++) ...[
               if (i > 0) const SizedBox(width: 4),
-              Expanded(child: Container(height: 6, decoration: BoxDecoration(color: i < count ? AppColors.teal : const Color(0xFFE8DDCF), borderRadius: BorderRadius.circular(3)))),
+              Expanded(child: Container(height: 6, decoration: BoxDecoration(color: i < count ? AppColors.teal : AppColors.line, borderRadius: BorderRadius.circular(3)))),
             ],
           ]),
           Row(children: [Expanded(child: _slot(sides[0])), const SizedBox(width: 12), Expanded(child: _slot(sides[1]))]),
@@ -1266,25 +1276,25 @@ class EarningsScreen extends ConsumerWidget {
       header: const AppHeader(title: 'الأرباح والتحويل'),
       children: [
         _gradientCard(children: [
-          Text('الرصيد المتاح للتحويل', style: tx(13, c: AppColors.white.withOpacity(0.85))),
-          Text(ltr(fmtMoney2(n('available'))), style: tx(32, w: w7, c: AppColors.white, h: 1.3)),
+          Text('الرصيد المتاح للتحويل', style: tx(13, c: AppColors.onPri.withOpacity(0.85))),
+          Text(ltr(fmtMoney2(n('available'))), style: tx(32, w: w7, c: AppColors.onPri, h: 1.3)),
           const SizedBox(height: 6),
           _glass(Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Icon(LucideIcons.clock, size: 16, color: AppColors.white),
+            const Icon(LucideIcons.clock, size: 16, color: AppColors.onPri),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                   'معلّق ${fmtMoney(n('pending'))} — يُتاح بعد 7 أيام عمل من تاريخ شحن كل طلب'
                   '${next != null ? '\nأقرب إتاحة: ${fmtDate(next)}' : ''}',
-                  style: tx(12, c: AppColors.white, h: 1.6)),
+                  style: tx(12, c: AppColors.onPri, h: 1.6)),
             ),
           ])),
           if (n('in_transfer') > 0) ...[
             const SizedBox(height: 6),
             _glass(Row(children: [
-              const Icon(LucideIcons.landmark, size: 16, color: AppColors.white),
+              const Icon(LucideIcons.landmark, size: 16, color: AppColors.onPri),
               const SizedBox(width: 8),
-              Expanded(child: Text('قيد التحويل ${fmtMoney(n('in_transfer'))}', style: tx(12, c: AppColors.white))),
+              Expanded(child: Text('قيد التحويل ${fmtMoney(n('in_transfer'))}', style: tx(12, c: AppColors.onPri))),
             ])),
           ],
           const SizedBox(height: 6),
@@ -1358,7 +1368,7 @@ class SubscriptionScreen extends ConsumerWidget {
   const SubscriptionScreen({super.key});
 
   Widget _plan(BuildContext context, String name, String price, List<String> feats, {bool hl = false, bool current = false, required String cta}) {
-    final fg = hl ? AppColors.white : AppColors.ink;
+    final fg = hl ? AppColors.onPri : AppColors.ink;
     return Container(
       decoration: BoxDecoration(
         gradient: hl ? AppColors.gradient : null,
@@ -1372,7 +1382,7 @@ class SubscriptionScreen extends ConsumerWidget {
           Icon(hl ? LucideIcons.crown : LucideIcons.award, size: 24, color: hl ? const Color(0xFFFFD98A) : AppColors.pri),
           const SizedBox(width: 8),
           Expanded(child: Text(name, style: tx(19, w: w7, c: fg))),
-          if (hl) const StatusBadge('الأكثر طلباً', bg: AppColors.white),
+          if (hl) const StatusBadge('الأكثر طلباً', bg: AppColors.onPri),
         ]),
         Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text(price, style: tx(30, w: w7, c: fg, h: 1.2)),
@@ -1381,9 +1391,9 @@ class SubscriptionScreen extends ConsumerWidget {
         ]),
         for (final f in feats)
           Row(children: [
-            Icon(LucideIcons.checkCircle, size: 18, color: hl ? AppColors.white : AppColors.teal),
+            Icon(LucideIcons.checkCircle, size: 18, color: hl ? AppColors.onPri : AppColors.teal),
             const SizedBox(width: 8),
-            Expanded(child: Text(f, style: tx(14, c: hl ? AppColors.white : AppColors.ink2))),
+            Expanded(child: Text(f, style: tx(14, c: hl ? AppColors.onPri : AppColors.ink2))),
           ]),
         const SizedBox(height: 4),
         AppButton(cta, v: hl ? BtnV.white : (current ? BtnV.ink : BtnV.out), height: 48, radius: 999, fs: 15,

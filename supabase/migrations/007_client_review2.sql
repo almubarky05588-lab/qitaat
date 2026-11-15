@@ -383,6 +383,7 @@ update public.listings set fitments = jsonb_build_array(jsonb_strip_nulls(jsonb_
 create index if not exists listings_fit_brands on public.listings using gin (fit_brands);
 
 -- ───────── مزايا الباقات: جدولة التمييز، قوالب العروض، تنبيه المخزون ─────────
+drop function if exists public.boost_listing(uuid);
 create or replace function public.boost_listing(p_listing uuid, p_start timestamptz default null)
 returns timestamptz language plpgsql security definer set search_path = public as $$
 declare l listings; q json; st timestamptz := greatest(coalesce(p_start, now()), now()); until_ts timestamptz;
@@ -426,3 +427,34 @@ begin
 end $$;
 drop trigger if exists low_stock on public.listings;
 create trigger low_stock after update of quantity on public.listings for each row execute function public.low_stock_alert();
+
+-- حد 500 صنف في برو ماكس صار لكل دفعة استيراد، وليس حداً إجمالياً للكتالوج
+create or replace function public.listing_limits()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare pl text; n int;
+begin
+  select plan into pl from profiles where id = new.seller_id;
+  if pl = 'free' or pl is null then
+    select count(*) into n from listings where seller_id = new.seller_id and created_at > date_trunc('day', now());
+    if n >= setting_num('free_listings_per_day', 5) then
+      raise exception 'الباقة المجانية تسمح بـ % إعلانات يومياً — رقّ لباقة برو لإعلانات بلا حدود', setting_num('free_listings_per_day', 5)::int;
+    end if;
+  end if;
+  return new;
+end $$;
+update public.app_settings set label = 'حد الأصناف لكل دفعة استيراد Excel (برو ماكس)' where key = 'pro_max_items';
+
+-- موقع الصنف داخل المخزن (برو ماكس)
+alter table public.listings add column if not exists shelf text;
+
+-- 008: موقع الصنف في جدول خاص بالمورد (بدل عمود عام في listings)
+alter table public.listings drop column if exists shelf;
+create table if not exists public.listing_shelves (
+  listing_id uuid primary key references public.listings(id) on delete cascade,
+  seller_id uuid not null references public.profiles(id) on delete cascade,
+  shelf text not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.listing_shelves enable row level security;
+drop policy if exists shelves_own on public.listing_shelves;
+create policy shelves_own on public.listing_shelves for all using (seller_id = auth.uid()) with check (seller_id = auth.uid() and exists (select 1 from public.listings l where l.id = listing_id and l.seller_id = auth.uid()));

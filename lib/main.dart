@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/router.dart';
 import 'core/theme.dart';
@@ -9,6 +11,9 @@ import 'data/mock.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    AppTheme.set((await SharedPreferences.getInstance()).getBool('dark') ?? false);
+  } catch (_) {}
   await initBackend();
   // القوائم من لوحة الإدارة (بحد أقصى 4 ثواني، وإلا نكمل بالقيم الاحتياطية)
   await Mock.load().timeout(const Duration(seconds: 4), onTimeout: () {});
@@ -20,7 +25,13 @@ class QitaatApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // تبديل الوضع الليلي يعيد بناء التطبيق بالألوان الجديدة (والصفحة الحالية تبقى)
+    return ValueListenableBuilder<bool>(valueListenable: AppTheme.mode, builder: (context, dark, _) => _app(dark));
+  }
+
+  Widget _app(bool dark) {
     return MaterialApp.router(
+      key: ValueKey(dark),
       title: 'قطعة سيارتك',
       debugShowCheckedModeBanner: false,
       theme: appTheme(),
@@ -33,10 +44,13 @@ class QitaatApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       // الضغط في أي مكان خارج حقول الكتابة يقفل لوحة المفاتيح (والنص يبقى)
-      builder: (context, child) => GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-        child: child ?? const SizedBox(),
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+          child: child ?? const SizedBox(),
+        ),
       ),
     );
   }

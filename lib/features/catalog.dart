@@ -135,7 +135,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   width: 56,
                   height: 56,
                   decoration: BoxDecoration(color: AppColors.pri, borderRadius: BorderRadius.circular(16)),
-                  child: const Icon(LucideIcons.slidersHorizontal, size: 22, color: AppColors.white),
+                  child: const Icon(LucideIcons.slidersHorizontal, size: 22, color: AppColors.onPri),
                 ),
               ),
             ]),
@@ -337,7 +337,7 @@ class _DetailsState extends ConsumerState<_Details> {
         if (p.images.isEmpty)
           Center(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(LucideIcons.car, size: 90, color: Color(0xFFC9BBA8)),
+              const Icon(LucideIcons.car, size: 90, color: AppColors.outline),
               const SizedBox(height: 8),
               Text('صورة القطعة', style: tx(13, c: AppColors.ph)),
             ]),
@@ -358,7 +358,7 @@ class _DetailsState extends ConsumerState<_Details> {
                   margin: const EdgeInsets.symmetric(horizontal: 3),
                   width: i == page ? 20 : 7,
                   height: 7,
-                  decoration: BoxDecoration(color: i == page ? AppColors.pri : const Color(0xFFE1D4C3), borderRadius: BorderRadius.circular(4)),
+                  decoration: BoxDecoration(color: i == page ? AppColors.pri : AppColors.chipB, borderRadius: BorderRadius.circular(4)),
                 ),
             ]),
           ),
@@ -556,7 +556,7 @@ class _DetailsState extends ConsumerState<_Details> {
                         width: 56,
                         height: 56,
                         decoration: BoxDecoration(color: AppColors.pri, borderRadius: BorderRadius.circular(16)),
-                        child: const Icon(LucideIcons.send, size: 22, color: AppColors.white),
+                        child: const Icon(LucideIcons.send, size: 22, color: AppColors.onPri),
                       ),
                     ),
                   ]),
@@ -613,7 +613,7 @@ class _BidSheetState extends State<_BidSheet> {
           width: 52,
           height: 52,
           decoration: BoxDecoration(color: filled ? AppColors.pri : AppColors.bg, shape: BoxShape.circle),
-          child: Icon(ic, size: 22, color: filled ? AppColors.white : AppColors.ink2),
+          child: Icon(ic, size: 22, color: filled ? AppColors.onPri : AppColors.ink2),
         ),
       );
 

@@ -318,7 +318,7 @@ class PlansScreen extends ConsumerWidget {
   const PlansScreen({super.key});
 
   Widget _plan(BuildContext context, String name, String price, List<String> feats, {bool hl = false, bool current = false, required String cta}) {
-    final fg = hl ? AppColors.white : AppColors.ink;
+    final fg = hl ? AppColors.onPri : AppColors.ink;
     return Container(
       decoration: BoxDecoration(
         gradient: hl ? AppColors.gradient : null,
@@ -332,7 +332,7 @@ class PlansScreen extends ConsumerWidget {
           Icon(hl ? LucideIcons.crown : LucideIcons.award, size: 24, color: hl ? const Color(0xFFFFD98A) : AppColors.pri),
           const SizedBox(width: 8),
           Expanded(child: Text(name, style: tx(19, w: w7, c: fg))),
-          if (hl) const StatusBadge('الأكثر طلباً', bg: AppColors.white),
+          if (hl) const StatusBadge('الأكثر طلباً', bg: AppColors.onPri),
         ]),
         Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text(price, style: tx(30, w: w7, c: fg, h: 1.2)),
@@ -341,9 +341,9 @@ class PlansScreen extends ConsumerWidget {
         ]),
         for (final f in feats)
           Row(children: [
-            Icon(LucideIcons.checkCircle, size: 18, color: hl ? AppColors.white : AppColors.teal),
+            Icon(LucideIcons.checkCircle, size: 18, color: hl ? AppColors.onPri : AppColors.teal),
             const SizedBox(width: 8),
-            Expanded(child: Text(f, style: tx(14, c: hl ? AppColors.white : AppColors.ink2))),
+            Expanded(child: Text(f, style: tx(14, c: hl ? AppColors.onPri : AppColors.ink2))),
           ]),
         const SizedBox(height: 4),
         AppButton(cta, v: hl ? BtnV.white : (current ? BtnV.ink : BtnV.out), height: 48, radius: 999, fs: 15,

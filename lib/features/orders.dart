@@ -100,7 +100,7 @@ class _OrderCard extends ConsumerWidget {
           Row(children: [
             for (var i = 0; i < 5; i++) ...[
               if (i > 0) const SizedBox(width: 4),
-              Expanded(child: Container(height: 5, decoration: BoxDecoration(color: i < o.progress ? AppColors.teal : const Color(0xFFE8DDCF), borderRadius: BorderRadius.circular(3)))),
+              Expanded(child: Container(height: 5, decoration: BoxDecoration(color: i < o.progress ? AppColors.teal : AppColors.line, borderRadius: BorderRadius.circular(3)))),
             ],
           ]),
         if (buttons.isNotEmpty)
@@ -134,10 +134,10 @@ class OrderDetailsScreen extends ConsumerWidget {
             border: st == 1 ? Border.all(color: AppColors.pri, width: 2) : null,
           ),
           child: st == 2
-              ? const Icon(LucideIcons.check, size: 12, color: AppColors.white)
+              ? const Icon(LucideIcons.check, size: 12, color: AppColors.onPri)
               : (st == 1 ? Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.pri, shape: BoxShape.circle)) : null),
         ),
-        if (!last) Container(width: 2, height: 30, color: st == 2 ? AppColors.teal : const Color(0xFFE6DACB)),
+        if (!last) Container(width: 2, height: 30, color: st == 2 ? AppColors.teal : AppColors.chipB),
       ]),
       const SizedBox(width: 12),
       Expanded(

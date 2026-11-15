@@ -113,16 +113,16 @@ class _PromoCarouselState extends ConsumerState<PromoCarousel> {
                 child: Row(children: [
                   Expanded(
                     child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(b.title, style: tx(18, w: w7, c: AppColors.white, h: 1.35), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(b.title, style: tx(18, w: w7, c: AppColors.onPri, h: 1.35), maxLines: 1, overflow: TextOverflow.ellipsis),
                       if ((b.subtitle ?? '').isNotEmpty) ...[
                         const SizedBox(height: 2),
-                        Text(b.subtitle!, style: tx(13, c: AppColors.white.withOpacity(0.85), h: 1.45), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(b.subtitle!, style: tx(13, c: AppColors.onPri.withOpacity(0.85), h: 1.45), maxLines: 1, overflow: TextOverflow.ellipsis),
                       ],
                       if ((b.cta ?? '').isNotEmpty) ...[
                         const SizedBox(height: 12),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                          decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(999)),
+                          decoration: BoxDecoration(color: AppColors.onPri, borderRadius: BorderRadius.circular(999)),
                           child: Text(b.cta!, style: tx(13, w: w6, c: b.color, h: 1.3)),
                         ),
                       ],
@@ -132,13 +132,13 @@ class _PromoCarouselState extends ConsumerState<PromoCarousel> {
                   Container(
                     width: 84,
                     height: 84,
-                    decoration: BoxDecoration(color: AppColors.white.withOpacity(0.16), shape: BoxShape.circle),
+                    decoration: BoxDecoration(color: AppColors.onPri.withOpacity(0.16), shape: BoxShape.circle),
                     alignment: Alignment.center,
-                    child: PhosphorIcon(b.icon, size: 44, color: AppColors.white, duotoneSecondaryOpacity: 0.3),
+                    child: PhosphorIcon(b.icon, size: 44, color: AppColors.onPri, duotoneSecondaryOpacity: 0.3),
                   ),
                 ]),
               ),
-              const Positioned(left: 0, right: 0, bottom: 0, child: SaduPattern(color: AppColors.white, height: 9, tooth: 12, opacity: 0.3)),
+              const Positioned(left: 0, right: 0, bottom: 0, child: SaduPattern(color: AppColors.onPri, height: 9, tooth: 12, opacity: 0.3)),
             ]),
           );
     return GestureDetector(

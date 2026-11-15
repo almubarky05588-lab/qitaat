@@ -285,6 +285,7 @@ const PAGES = [
   ['chats', '💬', 'المحادثات', ['super', 'support']],
   ['sec', '', 'النمو'],
   ['insights', '📈', 'ذكاء السوق', ['super', 'support']],
+  ['banners', '🖼️', 'البنرات الإعلانية', ['super', 'content']],
   ['notify', '🔔', 'الإشعارات', ['super', 'support', 'content']],
   ['sec', '', 'الإعدادات'],
   ['catalog', '🗂️', 'القوائم والمحتوى', ['super', 'content']],
@@ -821,6 +822,68 @@ VIEWS.insights = async (v) => {
     </div>
     <div class="card"><h3>📍 الطلبات حسب المدينة</h3>${bars(s.top_cities, 'n', (x) => esc(x.city))}</div>`;
   $$('[data-u]').forEach((a) => (a.onclick = (e) => { e.preventDefault(); userDrawer(a.dataset.u, route); }));
+};
+
+// البنرات الإعلانية (تظهر متقلبة تحت البحث في الصفحة الرئيسية للتطبيق)
+const BANNER_LINKS = [['/request-part', 'اطلب قطعة'], ['/sell', 'أبيع قطعة'], ['/search', 'البحث'], ['/m/subscription', 'الباقات'], ['/m/requests', 'طلبات العملاء (للتجار)'], ['/orders', 'مشترياتي'], ['', 'بدون رابط']];
+VIEWS.banners = async (v) => {
+  topActions('<button class="btn" id="bNew">+ بنر جديد</button>');
+  const rows = await must(sb.from('banners').select('*').order('sort'));
+  const live = (b) => b.active && (!b.starts_at || new Date(b.starts_at) <= new Date()) && (!b.ends_at || new Date(b.ends_at) > new Date());
+  const preview = (b) => b.image_url
+    ? `<div style="height:110px;border-radius:16px;overflow:hidden;background:var(--chip)"><img src="${esc(b.image_url)}" style="width:100%;height:100%;object-fit:cover"></div>`
+    : `<div style="height:110px;border-radius:16px;background:${esc(b.color || '#BE5430')};color:#fff;padding:14px 16px;display:flex;flex-direction:column;gap:2px"><b style="font-size:16px">${esc(b.title)}</b><span style="font-size:12px;opacity:.88">${esc(b.subtitle || '')}</span>${b.cta ? `<span style="margin-top:auto;align-self:flex-start;background:#fff;color:${esc(b.color || '#BE5430')};border-radius:999px;padding:3px 12px;font-size:12px;font-weight:600">${esc(b.cta)}</span>` : ''}</div>`;
+  v.innerHTML = `<div class="alert teal">البنرات تتقلب كل 4 ثواني تحت البحث في الرئيسية. ارفع صورة جاهزة (مقاس عريض 1200×500 تقريباً) أو اكتب نص ونختار له لون.</div>
+    ${rows.length ? `<div class="grid g2">${rows.map((b) => `<div class="card">
+      ${preview(b)}
+      <div class="row" style="margin:12px 0 6px"><b class="grow">${esc(b.title)}</b>${live(b) ? '<span class="tag teal">يظهر الآن</span>' : '<span class="tag">متوقف</span>'}</div>
+      <div class="muted" style="font-size:12px;margin-bottom:10px">الترتيب ${b.sort} · الرابط: ${esc((BANNER_LINKS.find((x) => x[0] === (b.link || '')) || [0, b.link || '—'])[1])}${b.ends_at ? ' · ينتهي ' + d(b.ends_at) : ''}</div>
+      <div class="row"><button class="btn out sm" data-ed="${b.id}">تعديل</button><button class="btn ${b.active ? 'out' : 'teal'} sm" data-tg="${b.id}">${b.active ? 'إيقاف' : 'تشغيل'}</button><button class="btn red sm" data-del="${b.id}">حذف</button></div>
+    </div>`).join('')}</div>` : '<div class="card empty">ما فيه بنرات — التطبيق يعرض بنر «اطلب قطعتك» الافتراضي</div>'}`;
+  const edit = (b) => {
+    b = b || { title: '', subtitle: '', cta: '', link: '/request-part', color: '#BE5430', sort: (rows.at(-1)?.sort || 0) + 1, active: true };
+    const isUrl = b.link && !BANNER_LINKS.some((x) => x[0] === b.link);
+    drawer(b.id ? 'تعديل البنر' : 'بنر جديد', `<div class="card">
+      <div class="field"><label>صورة البنر (اختياري — إذا رفعت صورة تظهر بدل النص)</label><input type="file" accept="image/*" id="bImg" class="in"><div id="bImgP" style="margin-top:8px">${b.image_url ? `<img src="${esc(b.image_url)}" style="width:100%;border-radius:12px"><label class="check"><input type="checkbox" id="bImgDel"> إزالة الصورة</label>` : ''}</div></div>
+      <div class="field"><label>العنوان</label><input class="in" id="bT" value="${esc(b.title)}" placeholder="مثال: خصم 15٪ على قطع تويوتا"></div>
+      <div class="field"><label>النص الفرعي</label><input class="in" id="bS" value="${esc(b.subtitle || '')}"></div>
+      <div class="row"><div class="field grow"><label>نص الزر</label><input class="in" id="bC" value="${esc(b.cta || '')}" placeholder="تسوّق الآن"></div>
+        <div class="field" style="width:110px"><label>اللون</label><input class="in" type="color" id="bCol" value="${esc(b.color || '#BE5430')}" style="height:42px;padding:4px"></div></div>
+      <div class="field"><label>يفتح عند الضغط</label><select class="in" id="bL">${BANNER_LINKS.map((x) => `<option value="${x[0]}">${x[1]}</option>`).join('')}<option value="__url">رابط خارجي…</option></select></div>
+      <div class="field ${isUrl ? '' : 'hidden'}" id="bUW"><label>الرابط الخارجي</label><input class="in ltr" id="bU" value="${isUrl ? esc(b.link) : ''}" placeholder="https://" style="text-align:left"></div>
+      <div class="row"><div class="field grow"><label>يبدأ (اختياري)</label><input class="in" type="date" id="bFrom" value="${b.starts_at ? b.starts_at.slice(0, 10) : ''}"></div>
+        <div class="field grow"><label>ينتهي (اختياري)</label><input class="in" type="date" id="bTo" value="${b.ends_at ? b.ends_at.slice(0, 10) : ''}"></div>
+        <div class="field" style="width:90px"><label>الترتيب</label><input class="in" type="number" id="bO" value="${b.sort}"></div></div>
+      <label class="check"><input type="checkbox" id="bA" ${b.active ? 'checked' : ''}> مفعّل</label>
+      <button class="btn block" id="bSave">حفظ</button></div>`);
+    $('#bL').value = isUrl ? '__url' : (b.link || '');
+    $('#bL').onchange = () => $('#bUW').classList.toggle('hidden', $('#bL').value !== '__url');
+    $('#bSave').onclick = async () => {
+      const title = $('#bT').value.trim(); if (!title) return toast('اكتب العنوان');
+      const btn = $('#bSave'); btn.disabled = true; btn.textContent = 'جاري الحفظ...';
+      try {
+        let image_url = b.image_url || null;
+        if ($('#bImgDel')?.checked) image_url = null;
+        const f = $('#bImg').files[0];
+        if (f) {
+          const ext = (f.name.split('.').pop() || 'jpg').toLowerCase();
+          const path = `${ME.id}/banner-${Date.now()}.${ext}`;
+          await must(sb.storage.from('media').upload(path, f, { contentType: f.type || 'image/jpeg', upsert: true }));
+          image_url = sb.storage.from('media').getPublicUrl(path).data.publicUrl;
+        }
+        const link = $('#bL').value === '__url' ? ($('#bU').value.trim() || null) : ($('#bL').value || null);
+        const patch = { title, subtitle: $('#bS').value.trim() || null, cta: $('#bC').value.trim() || null, color: $('#bCol').value, link, image_url, sort: +$('#bO').value || 0, active: $('#bA').checked,
+          starts_at: $('#bFrom').value ? new Date($('#bFrom').value + 'T00:00:00').toISOString() : null, ends_at: $('#bTo').value ? new Date($('#bTo').value + 'T23:59:59').toISOString() : null };
+        if (b.id) await must(sb.from('banners').update(patch).eq('id', b.id)); else await must(sb.from('banners').insert(patch));
+        await log(b.id ? 'تعديل بنر' : 'إضافة بنر', 'banner', b.id, { title });
+        toast('تم الحفظ'); route();
+      } catch (e) { toast('خطأ: ' + errMsg(e)); btn.disabled = false; btn.textContent = 'حفظ'; }
+    };
+  };
+  $('#bNew').onclick = () => edit();
+  $$('[data-ed]').forEach((x) => (x.onclick = () => edit(rows.find((r) => r.id === x.dataset.ed))));
+  $$('[data-tg]').forEach((x) => (x.onclick = async () => { const b = rows.find((r) => r.id === x.dataset.tg); if (await act(() => must(sb.from('banners').update({ active: !b.active }).eq('id', b.id)), 'تم')) { log(b.active ? 'إيقاف بنر' : 'تشغيل بنر', 'banner', b.id); route(); } }));
+  $$('[data-del]').forEach((x) => (x.onclick = async () => { if (confirm('حذف البنر؟') && (await act(() => must(sb.from('banners').delete().eq('id', x.dataset.del)), 'تم الحذف'))) { log('حذف بنر', 'banner', x.dataset.del); route(); } }));
 };
 
 // الإشعارات

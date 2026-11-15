@@ -183,13 +183,27 @@ class _ListingsManagerScreenState extends ConsumerState<ListingsManagerScreen> {
             Navigator.pop(context);
             if (await run(context, () => Api.boostListing(l.id), success: 'صار إعلانك مميز لمدة ${hours.toInt()} ساعة')) ref.invalidate(myListingsProvider);
           }),
+          if (left > 0)
+            AppButton('جدولة وقت التمييز', icon: LucideIcons.clock, v: BtnV.out2, onTap: () async {
+              Navigator.pop(context);
+              final now = DateTime.now();
+              final d = await showDatePicker(context: context, firstDate: now, lastDate: now.add(const Duration(days: 7)), initialDate: now, helpText: 'يوم التمييز');
+              if (d == null || !mounted) return;
+              final t = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 20, minute: 0), helpText: 'وقت بداية التمييز');
+              if (t == null || !mounted) return;
+              final at = DateTime(d.year, d.month, d.day, t.hour, t.minute);
+              if (at.isBefore(DateTime.now())) return showToast(context, 'اختر وقت في المستقبل');
+              if (await run(context, () => Api.boostListing(l.id, at: at), success: 'تمت الجدولة: يبدأ التمييز ${fmtDate(at)} ${fmtTime(at)}')) ref.invalidate(myListingsProvider);
+            }),
         ],
       ]),
     );
   }
 
   Widget _status(Listing l) => switch (l.status) {
-        'active' => l.boosted
+        'active' => l.boostScheduled
+            ? StatusBadge.amber('تمييز مجدول ${fmtDate(l.featuredFrom)} ${fmtTime(l.featuredFrom!)}', icon: LucideIcons.clock)
+            : l.boosted
             ? StatusBadge('مميز${l.featuredUntil != null ? ' حتى ${fmtTime(l.featuredUntil!)}' : ''}', icon: LucideIcons.star)
             : (l.quantity <= 1 ? const StatusBadge('نشط · قاربت تنفد', icon: LucideIcons.alertCircle) : const StatusBadge.teal('نشط')),
         'paused' => const StatusBadge.grey('موقوف · غير ظاهر للعامة'),
@@ -231,7 +245,7 @@ class _ListingsManagerScreenState extends ConsumerState<ListingsManagerScreen> {
                   success: l.status == 'draft' ? 'تم نشر الإعلان' : null);
               ref.invalidate(myListingsProvider);
             })),
-            if (l.status == 'active' && !l.boosted) ...[
+            if (l.status == 'active' && !l.boosted && !l.boostScheduled) ...[
               const SizedBox(width: 8),
               Expanded(child: AppButton('تمييز', icon: LucideIcons.star, iconFirst: true, v: BtnV.out, height: 40, fs: 13, radius: 12, onTap: () => _boost(l))),
             ],
@@ -383,8 +397,11 @@ class PlansScreen extends ConsumerWidget {
             '0',
             [
               '${n('free_listings_per_day', '5')} إعلانات قطع يومياً',
-              'استقبال ${n('free_requests_per_month', '50')} طلب من العملاء شهرياً',
-              'عمولة ${n('commission_free', '6')}% على المبيعات',
+              'استقبال ${n('free_requests_per_month', '50')} طلب مطابق من العملاء شهرياً',
+              'عمولة ${n('commission_free', '4.5')}% على المبيعات',
+              'المحادثات والإشعارات والفواتير',
+              'التوثيق بعد اعتماد المستندات',
+              'ملخص مبيعات أساسي',
             ],
             current: plan == 'free',
             cta: plan == 'free' ? 'باقتك الحالية' : 'الرجوع للمجانية'),
@@ -394,10 +411,12 @@ class PlansScreen extends ConsumerWidget {
             price('pro', '99'),
             [
               'إعلانات قطع بلا حدود',
-              'طلبات العملاء بلا حدود (حسب تخصصك)',
+              'طلبات العملاء المطابقة بلا حدود (حسب تخصصك)',
               'عمولة ${n('commission_pro', '4')}% فقط',
-              'شارة «تاجر موثّق» بعد اعتماد المستندات',
-              'تمييز ${n('boost_quota_pro', '5')} إعلانات في أعلى القائمة ($hours ساعة لكل إعلان)',
+              'تمييز ${n('boost_quota_pro', '5')} مرات شهرياً ($hours ساعة لكل مرة) مع جدولة وقت التمييز',
+              'قوالب الرد وعرض السعر',
+              'تنبيه انخفاض المخزون',
+              'تقارير المشاهدات والعروض والمبيعات',
             ],
             hl: true,
             current: plan == 'pro',
@@ -408,10 +427,14 @@ class PlansScreen extends ConsumerWidget {
             price('pro_max', '199'),
             [
               'كل مزايا لولو برو',
-              'رفع حتى ${n('pro_max_items', '500')} صنف قطع',
-              'أولوية في طلبات العملاء (حسب تخصصك)',
-              'عمولة ${n('commission_pro_max', '4')}%',
-              'تمييز ${n('boost_quota_pro_max', '10')} إعلانات في أعلى القائمة ($hours ساعة لكل إعلان)',
+              'عمولة ${n('commission_pro_max', '2')}% فقط',
+              'تمييز ${n('boost_quota_pro_max', '10')} مرات شهرياً ($hours ساعة لكل مرة) مع الجدولة',
+              'موقع الصنف داخل المخزن (رف / مستودع)',
+              'أولوية ملائمة في طلبات العملاء (حسب تخصصك)',
+              'دعم بأولوية استجابة',
+              'استيراد وتحديث عبر Excel حتى ${n('pro_max_items', '500')} صنف لكل دفعة (قريباً)',
+              'حسابات موظفين بصلاحيات (قريباً)',
+              'اتجاهات الطلب في تخصصك وتقارير مع تصدير (قريباً)',
             ],
             current: plan == 'pro_max',
             cta: plan == 'pro_max' ? 'باقتك الحالية' : 'اشترك في برو ماكس'),

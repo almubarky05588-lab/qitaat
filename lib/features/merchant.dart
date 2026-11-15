@@ -268,6 +268,60 @@ class _SubmitOfferScreenState extends ConsumerState<SubmitOfferScreen> {
   List<String> images = [];
   List<OfferItem>? items; // صف مستقل لكل قطعة في طلب العميل
   late Future<PartRequest?> future = Api.request(widget.id);
+  List<Map<String, dynamic>> templates = [];
+  int formKey = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    Api.offerTemplates().then((t) {
+      if (mounted) setState(() => templates = t);
+    }).catchError((_) {});
+  }
+
+  /// تطبيق قالب: التوصيل والضمان والرسالة والشحن، ونوع/حالة القطع
+  void _apply(Map<String, dynamic> t) {
+    final d = Map<String, dynamic>.from(t['data'] ?? {});
+    setState(() {
+      delivery = '${d['delivery'] ?? delivery}';
+      warranty = '${d['warranty'] ?? warranty}';
+      note = '${d['note'] ?? ''}';
+      inclShipping = d['incl_shipping'] ?? inclShipping;
+      if (items != null) {
+        items = [for (final e in items!) e.copy(type: d['type'] ?? e.type, condition: d['condition'] ?? e.condition)];
+      }
+      formKey++;
+    });
+    showToast(context, 'تم تطبيق قالب «${t['name']}»');
+  }
+
+  Future<void> _saveTemplate() async {
+    var name = '';
+    final ok = await showAppSheet<bool>(
+      context,
+      VCol(gap: 12, [
+        Text('حفظ كقالب', style: tx(18, w: w6)),
+        Text('يحفظ مدة التوصيل والضمان والرسالة والشحن ونوع وحالة القطع، وتطبّقه بضغطة في عروضك الجاية', style: tx(12, c: AppColors.mute)),
+        AppField(hint: 'اسم القالب (مثال: أصلي وكالة)', fill: AppColors.bg, onChanged: (v) => name = v),
+        AppButton('حفظ', onTap: () => Navigator.pop(context, true)),
+      ]),
+    );
+    if (ok != true || name.trim().isEmpty || !mounted) return;
+    final first = items?.firstWhere((e) => e.available, orElse: () => items!.first);
+    final saved = await run(
+        context,
+        () => Api.saveOfferTemplate(name.trim(), {
+              'delivery': delivery,
+              'warranty': warranty,
+              'note': note,
+              'incl_shipping': inclShipping,
+              if (first != null) 'type': first.type,
+              if (first != null) 'condition': first.condition,
+            }),
+        success: 'انحفظ القالب');
+    if (saved) templates = await Api.offerTemplates();
+    if (mounted) setState(() {});
+  }
 
   static const types = ['أصلي', 'تجاري'];
   static const conds = ['جديد', 'مستعمل', 'مجدد'];
@@ -403,6 +457,27 @@ class _SubmitOfferScreenState extends ConsumerState<SubmitOfferScreen> {
                     ),
                 ]),
               ),
+              if (ref.watch(myProfileProvider).valueOrNull?.plan != 'free')
+                VCol(gap: 8, [
+                  Row(children: [
+                    Expanded(child: Text('قوالب الرد وعرض السعر', style: tx(14, w: w5))),
+                    GestureDetector(onTap: _saveTemplate, child: Text('حفظ العرض كقالب', style: tx(13, w: w5, c: AppColors.teal))),
+                  ]),
+                  if (templates.isEmpty)
+                    Text('ما عندك قوالب — عبّي العرض واحفظه كقالب', style: tx(12, c: AppColors.mute))
+                  else
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      for (final t in templates)
+                        GestureDetector(
+                          onLongPress: () async {
+                            await run(context, () => Api.deleteOfferTemplate('${t['id']}'), success: 'انحذف القالب');
+                            final x = await Api.offerTemplates();
+                            if (mounted) setState(() => templates = x);
+                          },
+                          child: AppChip('${t['name']}', icon: LucideIcons.copy, px: 12, py: 7, onTap: () => _apply(t)),
+                        ),
+                    ]),
+                ]),
               Text('سعّر كل قطعة لحالها', style: tx(16, w: w6)),
               Text('حدّد السعر والنوع والحالة لكل قطعة، أو علّمها «غير متوفرة» وكمّل باقي القطع', style: tx(12, c: AppColors.mute)),
               for (var i = 0; i < (items ??= [for (final n in (r.parts.isEmpty ? [r.title] : r.parts)) OfferItem(n)]).length; i++) _itemCard(i),
@@ -440,7 +515,8 @@ class _SubmitOfferScreenState extends ConsumerState<SubmitOfferScreen> {
                             onTap: () => pickFromSheet(context, 'الضمان', const ['بدون ضمان', '3 أشهر', '6 أشهر', 'سنة', 'ضمان الوكالة'], (v) => setState(() => warranty = v))))),
               ]),
               LabeledField('صور القطعة', PhotoStrip(urls: images, max: 6, onChanged: (v) => setState(() => images = v))),
-              LabeledField('رسالة للعميل (اختياري)', AppField(hint: 'مثال: متوفر أصلي وكالة، نشحن اليوم', area: true, onChanged: (v) => note = v)),
+              LabeledField('رسالة للعميل (اختياري)',
+                  AppField(key: ValueKey('note$formKey'), hint: 'مثال: متوفر أصلي وكالة، نشحن اليوم', value: note.isEmpty ? null : note, area: true, onChanged: (v) => note = v)),
               const InfoBox('العميل يقارن عرضك مع باقي الموردين — السعر والتقييم وسرعة التوصيل يفرقون'),
               busy ? const SizedBox(height: 54, child: Center(child: CircularProgressIndicator(color: AppColors.pri))) : AppButton('أرسل العرض', icon: LucideIcons.send, onTap: _send),
             ],

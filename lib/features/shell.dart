@@ -6,16 +6,18 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../app/state.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
+import 'home.dart' show requestsBadgeProvider;
 import 'merchant_plus.dart' show CustomerRequestsPage;
 import 'requests.dart' show MyRequestsScreen;
 
 /// الهيكل الرئيسي: الشريط السفلي + زر الإضافة العائم
-class MainShell extends StatelessWidget {
+class MainShell extends ConsumerWidget {
   final StatefulNavigationShell shell;
   const MainShell({super.key, required this.shell});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final badge = ref.watch(requestsBadgeProvider).valueOrNull ?? 0;
     final bottomInset = MediaQuery.of(context).padding.bottom;
     const barH = 66.0;
     return Scaffold(
@@ -38,11 +40,11 @@ class MainShell extends StatelessWidget {
               ),
               // كل تبويب يأخذ نفس العرض، والنص يتوسّط تحت أيقونته بالضبط
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Expanded(child: _tab(0, LucideIcons.home, 'الرئيسية')),
-                Expanded(child: _tab(1, LucideIcons.shoppingBag, 'مشترياتي')),
+                Expanded(child: _tab(0, LucideIcons.home, AppIconsFill.home, 'الرئيسية')),
+                Expanded(child: _tab(1, LucideIcons.shoppingBag, AppIconsFill.shoppingBag, 'مشترياتي')),
                 const SizedBox(width: 76),
-                Expanded(child: _tab(2, LucideIcons.archive, 'طلبات')),
-                Expanded(child: _tab(3, LucideIcons.user, 'حسابي')),
+                Expanded(child: _tab(2, LucideIcons.archive, AppIconsFill.archive, 'طلبات', badge: badge)),
+                Expanded(child: _tab(3, LucideIcons.user, AppIconsFill.user, 'حسابي')),
               ]),
             ),
           ),
@@ -63,7 +65,7 @@ class MainShell extends StatelessWidget {
                     shape: BoxShape.circle,
                     boxShadow: [BoxShadow(color: AppColors.pri.withOpacity(0.35), blurRadius: 14, offset: const Offset(0, 6))],
                   ),
-                  child: const Icon(LucideIcons.plus, size: 28, color: AppColors.white),
+                  child: const Icon(PhosphorIconsBold.plus, size: 26, color: AppColors.white),
                 ),
               ),
             ),
@@ -73,14 +75,27 @@ class MainShell extends StatelessWidget {
     );
   }
 
-  Widget _tab(int i, IconData icon, String label) {
+  Widget _tab(int i, IconData icon, IconData iconOn, String label, {int badge = 0}) {
     final on = shell.currentIndex == i;
     final c = on ? AppColors.pri : AppColors.mute;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => shell.goBranch(i, initialLocation: i == shell.currentIndex),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.center, children: [
-        Icon(icon, size: 24, color: c),
+        Stack(clipBehavior: Clip.none, children: [
+          Icon(on ? iconOn : icon, size: 25, color: c),
+          if (badge > 0)
+            Positioned(
+              top: -6,
+              left: -12,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(color: AppColors.pri, borderRadius: BorderRadius.circular(999), border: Border.all(color: AppColors.white, width: 2)),
+                child: Text(ltr(badge > 9 ? '+9' : '$badge'), textAlign: TextAlign.center, style: tx(10, w: w6, c: AppColors.white, h: 1.3)),
+              ),
+            ),
+        ]),
         const SizedBox(height: 4),
         SizedBox(
           width: double.infinity,

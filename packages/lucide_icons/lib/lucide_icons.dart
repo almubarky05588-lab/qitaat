@@ -1,82 +1,109 @@
-// طبقة توافق: تحافظ على أسماء الأيقونات المستخدمة في كود التطبيق
-// وتربطها بحزمة lucide_icons_flutter (نفس رسومات Lucide في التصميم).
+// طبقة توافق: نفس أسماء الأيقونات المستخدمة في كود التطبيق،
+// مربوطة بمكتبة Phosphor (رسم أنعم ومتناسق) بدل Lucide.
+// LucideIcons = النمط العادي · AppIconsFill = الممتلئ (التبويب المختار) · AppIconsDuo = بلونين (الأيقونات الكبيرة)
 import 'package:flutter/widgets.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart' as l;
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+
+export 'package:phosphor_flutter/phosphor_flutter.dart' show PhosphorIcon, PhosphorIconsRegular, PhosphorIconsFill, PhosphorIconsDuotone, PhosphorIconsBold;
 
 class LucideIcons {
   LucideIcons._();
 
-  static const IconData home = l.LucideIcons.house;
-  static const IconData shoppingBag = l.LucideIcons.shoppingBag;
-  static const IconData archive = l.LucideIcons.archive;
-  static const IconData user = l.LucideIcons.user;
-  static const IconData plus = l.LucideIcons.plus;
-  static const IconData minus = l.LucideIcons.minus;
-  static const IconData search = l.LucideIcons.search;
-  static const IconData bell = l.LucideIcons.bell;
-  static const IconData messageSquare = l.LucideIcons.messageSquare;
-  static const IconData shoppingCart = l.LucideIcons.shoppingCart;
-  static const IconData heart = l.LucideIcons.heart;
-  static const IconData mapPin = l.LucideIcons.mapPin;
-  static const IconData clock = l.LucideIcons.clock;
-  static const IconData chevronLeft = l.LucideIcons.chevronLeft;
-  static const IconData chevronDown = l.LucideIcons.chevronDown;
-  static const IconData arrowRight = l.LucideIcons.arrowRight;
-  static const IconData arrowLeft = l.LucideIcons.arrowLeft;
-  static const IconData arrowUp = l.LucideIcons.arrowUp;
-  static const IconData arrowDown = l.LucideIcons.arrowDown;
-  static const IconData tag = l.LucideIcons.tag;
-  static const IconData truck = l.LucideIcons.truck;
-  static const IconData send = l.LucideIcons.send;
-  static const IconData fileText = l.LucideIcons.fileText;
-  static const IconData store = l.LucideIcons.store;
-  static const IconData camera = l.LucideIcons.camera;
-  static const IconData phone = l.LucideIcons.phone;
-  static const IconData smartphone = l.LucideIcons.smartphone;
-  static const IconData lock = l.LucideIcons.lock;
-  static const IconData share2 = l.LucideIcons.share2;
-  static const IconData flag = l.LucideIcons.flag;
-  static const IconData slidersHorizontal = l.LucideIcons.slidersHorizontal;
-  static const IconData check = l.LucideIcons.check;
-  static const IconData checkCheck = l.LucideIcons.checkCheck;
-  static const IconData checkCircle = l.LucideIcons.circleCheck;
-  static const IconData star = l.LucideIcons.star;
-  static const IconData car = l.LucideIcons.car;
-  static const IconData layoutGrid = l.LucideIcons.layoutGrid;
-  static const IconData layoutDashboard = l.LucideIcons.layoutDashboard;
-  static const IconData inbox = l.LucideIcons.inbox;
-  static const IconData award = l.LucideIcons.award;
-  static const IconData settings = l.LucideIcons.settings;
-  static const IconData headphones = l.LucideIcons.headphones;
-  static const IconData pencil = l.LucideIcons.pencil;
-  static const IconData users = l.LucideIcons.users;
-  static const IconData gavel = l.LucideIcons.gavel;
-  static const IconData atSign = l.LucideIcons.atSign;
-  static const IconData music = l.LucideIcons.music;
-  static const IconData creditCard = l.LucideIcons.creditCard;
-  static const IconData shieldCheck = l.LucideIcons.shieldCheck;
-  static const IconData download = l.LucideIcons.download;
-  static const IconData rotateCw = l.LucideIcons.rotateCw;
-  static const IconData receipt = l.LucideIcons.receipt;
-  static const IconData badgeCheck = l.LucideIcons.badgeCheck;
-  static const IconData shapes = l.LucideIcons.shapes;
-  static const IconData logOut = l.LucideIcons.logOut;
-  static const IconData x = l.LucideIcons.x;
-  static const IconData info = l.LucideIcons.info;
-  static const IconData copy = l.LucideIcons.copy;
-  static const IconData trash2 = l.LucideIcons.trash2;
-  static const IconData ticket = l.LucideIcons.ticket;
-  static const IconData moreVertical = l.LucideIcons.ellipsisVertical;
-  static const IconData globe = l.LucideIcons.globe;
-  static const IconData moon = l.LucideIcons.moon;
-  static const IconData helpCircle = l.LucideIcons.circleHelp;
-  static const IconData alertCircle = l.LucideIcons.circleAlert;
-  static const IconData eye = l.LucideIcons.eye;
-  static const IconData trendingUp = l.LucideIcons.trendingUp;
-  static const IconData package = l.LucideIcons.package;
-  static const IconData percent = l.LucideIcons.percent;
-  static const IconData pause = l.LucideIcons.pause;
-  static const IconData printer = l.LucideIcons.printer;
-  static const IconData landmark = l.LucideIcons.landmark;
-  static const IconData crown = l.LucideIcons.crown;
+  static const IconData home = PhosphorIconsRegular.house;
+  static const IconData shoppingBag = PhosphorIconsRegular.handbag;
+  static const IconData archive = PhosphorIconsRegular.package;
+  static const IconData user = PhosphorIconsRegular.user;
+  static const IconData plus = PhosphorIconsRegular.plus;
+  static const IconData minus = PhosphorIconsRegular.minus;
+  static const IconData search = PhosphorIconsRegular.magnifyingGlass;
+  static const IconData bell = PhosphorIconsRegular.bell;
+  static const IconData messageSquare = PhosphorIconsRegular.chatCircleDots;
+  static const IconData shoppingCart = PhosphorIconsRegular.shoppingCartSimple;
+  static const IconData heart = PhosphorIconsRegular.heart;
+  static const IconData mapPin = PhosphorIconsRegular.mapPin;
+  static const IconData clock = PhosphorIconsRegular.clock;
+  static const IconData chevronLeft = PhosphorIconsRegular.caretLeft;
+  static const IconData chevronDown = PhosphorIconsRegular.caretDown;
+  static const IconData arrowRight = PhosphorIconsRegular.arrowRight;
+  static const IconData arrowLeft = PhosphorIconsRegular.arrowLeft;
+  static const IconData arrowUp = PhosphorIconsRegular.arrowUp;
+  static const IconData arrowDown = PhosphorIconsRegular.arrowDown;
+  static const IconData tag = PhosphorIconsRegular.tag;
+  static const IconData truck = PhosphorIconsRegular.truck;
+  static const IconData send = PhosphorIconsRegular.paperPlaneTilt;
+  static const IconData fileText = PhosphorIconsRegular.fileText;
+  static const IconData store = PhosphorIconsRegular.storefront;
+  static const IconData camera = PhosphorIconsRegular.camera;
+  static const IconData phone = PhosphorIconsRegular.phone;
+  static const IconData smartphone = PhosphorIconsRegular.deviceMobile;
+  static const IconData lock = PhosphorIconsRegular.lock;
+  static const IconData share2 = PhosphorIconsRegular.shareNetwork;
+  static const IconData flag = PhosphorIconsRegular.flag;
+  static const IconData slidersHorizontal = PhosphorIconsRegular.slidersHorizontal;
+  static const IconData check = PhosphorIconsRegular.check;
+  static const IconData checkCheck = PhosphorIconsRegular.checks;
+  static const IconData checkCircle = PhosphorIconsRegular.checkCircle;
+  static const IconData star = PhosphorIconsRegular.star;
+  static const IconData car = PhosphorIconsRegular.car;
+  static const IconData layoutGrid = PhosphorIconsRegular.squaresFour;
+  static const IconData layoutDashboard = PhosphorIconsRegular.chartPieSlice;
+  static const IconData inbox = PhosphorIconsRegular.tray;
+  static const IconData award = PhosphorIconsRegular.medal;
+  static const IconData settings = PhosphorIconsRegular.gear;
+  static const IconData headphones = PhosphorIconsRegular.headset;
+  static const IconData pencil = PhosphorIconsRegular.pencilSimple;
+  static const IconData users = PhosphorIconsRegular.users;
+  static const IconData gavel = PhosphorIconsRegular.gavel;
+  static const IconData atSign = PhosphorIconsRegular.xLogo;
+  static const IconData music = PhosphorIconsRegular.tiktokLogo;
+  static const IconData creditCard = PhosphorIconsRegular.creditCard;
+  static const IconData shieldCheck = PhosphorIconsRegular.shieldCheck;
+  static const IconData download = PhosphorIconsRegular.downloadSimple;
+  static const IconData rotateCw = PhosphorIconsRegular.arrowClockwise;
+  static const IconData receipt = PhosphorIconsRegular.receipt;
+  static const IconData badgeCheck = PhosphorIconsRegular.sealCheck;
+  static const IconData shapes = PhosphorIconsRegular.shapes;
+  static const IconData logOut = PhosphorIconsRegular.signOut;
+  static const IconData x = PhosphorIconsRegular.x;
+  static const IconData info = PhosphorIconsRegular.info;
+  static const IconData copy = PhosphorIconsRegular.copy;
+  static const IconData trash2 = PhosphorIconsRegular.trash;
+  static const IconData ticket = PhosphorIconsRegular.ticket;
+  static const IconData moreVertical = PhosphorIconsRegular.dotsThreeVertical;
+  static const IconData globe = PhosphorIconsRegular.globe;
+  static const IconData moon = PhosphorIconsRegular.moon;
+  static const IconData helpCircle = PhosphorIconsRegular.question;
+  static const IconData alertCircle = PhosphorIconsRegular.warningCircle;
+  static const IconData eye = PhosphorIconsRegular.eye;
+  static const IconData trendingUp = PhosphorIconsRegular.trendUp;
+  static const IconData package = PhosphorIconsRegular.package;
+  static const IconData percent = PhosphorIconsRegular.percent;
+  static const IconData pause = PhosphorIconsRegular.pause;
+  static const IconData printer = PhosphorIconsRegular.printer;
+  static const IconData landmark = PhosphorIconsRegular.bank;
+  static const IconData crown = PhosphorIconsRegular.crown;
+}
+
+/// أيقونات ممتلئة — للتبويب المختار في الشريط السفلي
+class AppIconsFill {
+  AppIconsFill._();
+
+  static const IconData home = PhosphorIconsFill.house;
+  static const IconData shoppingBag = PhosphorIconsFill.handbag;
+  static const IconData archive = PhosphorIconsFill.package;
+  static const IconData user = PhosphorIconsFill.user;
+}
+
+/// أيقونات بلونين (Duotone) — للبطاقات والأيقونات الكبيرة، تُعرض بـ PhosphorIcon
+class AppIconsDuo {
+  AppIconsDuo._();
+
+  static const IconData shoppingBag = PhosphorIconsDuotone.handbag;
+  static const IconData send = PhosphorIconsDuotone.paperPlaneTilt;
+  static const IconData search = PhosphorIconsDuotone.magnifyingGlass;
+  static const IconData tag = PhosphorIconsDuotone.tag;
+  static const IconData crown = PhosphorIconsDuotone.crown;
+  static const IconData sparkle = PhosphorIconsDuotone.sparkle;
+  static const IconData receipt = PhosphorIconsDuotone.receipt;
+  static const IconData truck = PhosphorIconsDuotone.truck;
 }

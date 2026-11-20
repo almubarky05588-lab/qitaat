@@ -118,6 +118,9 @@ done
 step "معرّف التطبيق $BUNDLE_ID"
 sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = sa\.almubarky\.qitaat;/PRODUCT_BUNDLE_IDENTIFIER = ${BUNDLE_ID};/g" ios/Runner.xcodeproj/project.pbxproj
 grep -m1 "PRODUCT_BUNDLE_IDENTIFIER" ios/Runner.xcodeproj/project.pbxproj
+# آيفون فقط (بدون آيباد) — المتجر ما يطلب صور شاشات آيباد
+sed -i '' 's/TARGETED_DEVICE_FAMILY = "1,2";/TARGETED_DEVICE_FAMILY = 1;/g' ios/Runner.xcodeproj/project.pbxproj
+grep -m1 "TARGETED_DEVICE_FAMILY" ios/Runner.xcodeproj/project.pbxproj || true
 
 BUILD=$(( 100 + ${GITHUB_RUN_NUMBER:-1} ))
 step "بناء Flutter (رقم البناء $BUILD)"

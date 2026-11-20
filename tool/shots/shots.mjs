@@ -46,7 +46,7 @@ await shoot(browser, '+966500000009', [
   ['1-home', '#/home'],
   ['2-search', '#/search'],
   ['3-part', async (t) => {
-    const l = await rest('listings?select=id&status=eq.active&images=neq.{}&order=created_at.desc&limit=1', t);
+    const l = await rest('listings?select=id&status=eq.active&images=neq.{}&title=ilike.*%D8%AD%D9%88%D8%B6*&limit=1', t);
     return `#/part/${l[0]?.id}`;
   }],
   ['4-request', '#/request-part'],

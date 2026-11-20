@@ -23,4 +23,5 @@ jobs:
       - name: تجهيز صفحة المتجر
         env:
           APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
-        run: python3 tool/asc_submit.py "${{ inputs.build }}" "${{ inputs.submit }}"
+        run: |
+          if [ "${{ inputs.submit }}" = "privacy" ]; then python3 tool/asc_privacy.py; else python3 tool/asc_submit.py "${{ inputs.build }}" "${{ inputs.submit }}"; fi

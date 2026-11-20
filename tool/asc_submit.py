@@ -153,24 +153,31 @@ age = call('GET', f'/v1/appInfos/{INFO}/ageRatingDeclaration')
 if age:
     AGE = age['data']['id']
     cur = age['data']['attributes']
-    print('age fields', list(cur.keys()))
-    want = {}
-    for k, v in cur.items():
-        if k in ('kidsAgeBand', 'ageRatingOverride', 'koreaAgeRatingOverride', 'ageRatingOverrideV2', 'developerAgeRatingInfoUrl'):
-            continue
-        if isinstance(v, bool) or (v is None and k[0].islower() and any(w in k for w in ('Gambling', 'unrestricted', 'Unrestricted', 'lootBox', 'LootBox', 'Advertising', 'advertising', 'parental', 'Parental', 'ageAssurance', 'AgeAssurance', 'messaging', 'Messaging', 'userGenerated', 'UserGenerated', 'healthOrWellness'))):
-            want[k] = False
-        elif isinstance(v, str) or v is None:
-            want[k] = 'NONE'
-    # التطبيق فيه محادثات ومحتوى يضيفه المستخدمون
-    for k in ('messagingAndChat', 'userGeneratedContent'):
-        if k in cur:
-            want[k] = True
-    r = call('PATCH', f'/v1/ageRatingDeclarations/{AGE}', {'data': {'type': 'ageRatingDeclarations', 'id': AGE, 'attributes': want}}, ok_fail=True)
-    if r is None:
-        # إعادة المحاولة بالحقول الأساسية فقط
-        basic = {k: v for k, v in want.items() if k in ('alcoholTobaccoOrDrugUseOrReferences', 'contests', 'gamblingSimulated', 'horrorOrFearThemes', 'matureOrSuggestiveThemes', 'medicalOrTreatmentInformation', 'profanityOrCrudeHumor', 'sexualContentGraphicAndNudity', 'sexualContentOrNudity', 'violenceCartoonOrFantasy', 'violenceRealistic', 'violenceRealisticProlongedGraphicOrSadistic', 'gambling', 'unrestrictedWebAccess')}
-        call('PATCH', f'/v1/ageRatingDeclarations/{AGE}', {'data': {'type': 'ageRatingDeclarations', 'id': AGE, 'attributes': basic}})
+    skip = {'kidsAgeBand', 'ageRatingOverride', 'koreaAgeRatingOverride', 'ageRatingOverrideV2', 'developerAgeRatingInfoUrl', 'gracRatingClassificationNumber'}
+    enums = {'alcoholTobaccoOrDrugUseOrReferences', 'contests', 'gamblingSimulated', 'gunsOrOtherWeapons', 'horrorOrFearThemes', 'matureOrSuggestiveThemes',
+             'medicalOrTreatmentInformation', 'profanityOrCrudeHumor', 'sexualContentGraphicAndNudity', 'sexualContentOrNudity', 'violenceCartoonOrFantasy',
+             'violenceRealistic', 'violenceRealisticProlongedGraphicOrSadistic'}
+    yes = {'messagingAndChat', 'userGeneratedContent'}  # محادثات بين المستخدمين وإعلانات يضيفونها
+    want = {k: ('NONE' if k in enums else (k in yes)) for k in cur if k not in skip}
+    import re as _re
+    for attempt in range(8):
+        r = requests.patch(API + f'/v1/ageRatingDeclarations/{AGE}', headers={'Authorization': 'Bearer ' + tok(), 'Content-Type': 'application/json'},
+                           data=json.dumps({'data': {'type': 'ageRatingDeclarations', 'id': AGE, 'attributes': want}}))
+        if r.status_code < 400:
+            print('✅ age rating saved')
+            break
+        bad = _re.findall(r"attribute '(\w+)'\. Expected a (\w+)", r.text)
+        unknown = _re.findall(r'"pointer" : "/data/attributes/(\w+)"', r.text)
+        print('age retry', attempt, bad or r.text[:400])
+        if not bad and not unknown:
+            problems.append('age rating: ' + r.text[:600]); break
+        for k, t in bad:
+            want[k] = (k in yes) if t == 'BOOLEAN' else 'NONE'
+        if not bad:
+            for k in unknown:
+                want.pop(k, None)
+    else:
+        problems.append('age rating لم يُحفظ')
 
 step('وصف النسخة والروابط')
 vlocs = {l['attributes']['locale']: l['id'] for l in call('GET', f'/v1/appStoreVersions/{V}/appStoreVersionLocalizations')['data']}

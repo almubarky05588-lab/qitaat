@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -15,6 +16,15 @@ Future<void> main() async {
     AppTheme.set((await SharedPreferences.getInstance()).getBool('dark') ?? false);
   } catch (_) {}
   await initBackend();
+  // نسخة الويب فقط (لتصوير شاشات المتجر): دخول بجلسة صالحة عبر ?rt=<refresh token>
+  if (kIsWeb) {
+    final rt = Uri.base.queryParameters['rt'];
+    if (rt != null && rt.isNotEmpty) {
+      try {
+        await sb.auth.setSession(rt);
+      } catch (_) {}
+    }
+  }
   // القوائم من لوحة الإدارة (بحد أقصى 4 ثواني، وإلا نكمل بالقيم الاحتياطية)
   await Mock.load().timeout(const Duration(seconds: 4), onTimeout: () {});
   runApp(const ProviderScope(child: QitaatApp()));

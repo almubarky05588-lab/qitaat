@@ -1,0 +1,26 @@
+name: App Store submit
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: رقم البناء
+        required: true
+      submit:
+        description: إرسال للمراجعة (submit) أو تجهيز فقط (prepare)
+        default: prepare
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pyjwt cryptography requests > /dev/null
+      - name: تجهيز صفحة المتجر
+        env:
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+        run: python3 tool/asc_submit.py "${{ inputs.build }}" "${{ inputs.submit }}"

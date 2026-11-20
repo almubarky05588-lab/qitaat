@@ -1,0 +1,80 @@
+
+==================== Xcode ====================
+Xcode 26.6
+Build version 17F113
+
+==================== مفتاح App Store Connect ====================
+Key ID: Y6PW89YX6J
+Issuer: 3aa57344-99da-4421-94f9-5aaf95c16287
+✅ المفتاح سليم
+
+==================== مشروع iOS ====================
+
+Your application code is in ./lib/main.dart.
+
+
+==================== الحزم وتحليل الكود ====================
+45 issues found. (ran in 15.9s)
+
+==================== أيقونة التطبيق ====================
+  pixelWidth: 1024
+  pixelHeight: 1024
+  ════════════════════════════════════════════
+     FLUTTER LAUNCHER ICONS (v0.14.4)                               
+  ════════════════════════════════════════════
+  
+• Overwriting default iOS launcher icon with new icon
+No platform provided
+
+✓ Successfully generated launcher icons
+Contents.json
+Icon-App-1024x1024@1x.png
+Icon-App-20x20@1x.png
+Icon-App-20x20@2x.png
+Icon-App-20x20@3x.png
+
+==================== Info.plist (الاسم + نصوص الأذونات المطلوبة من Apple) ====================
+CFBundleDisplayName = قطعة سيارتك
+NSPhotoLibraryUsageDescription = يحتاج التطبيق الوصول للصور لإرفاق صور القطع في الطلبات والإعلانات
+NSCameraUsageDescription = يحتاج التطبيق الكاميرا لتصوير القطع من 4 اتجاهات قبل الشحن ولإرفاقها في الطلبات
+
+==================== معرّف التطبيق sa.almubarky.qitaat ====================
+				PRODUCT_BUNDLE_IDENTIFIER = sa.almubarky.qitaat;
+				TARGETED_DEVICE_FAMILY = 1;
+
+==================== بناء Flutter (رقم البناء 111) ====================
+Warning: Building for device with codesigning disabled. You will have to manually codesign before deploying to device.
+Building sa.almubarky.qitaat for device (ios-release)...
+
+==================== الأرشفة (بدون توقيع — التوقيع وقت التصدير) ====================
+
+==================== التوقيع للتوزيع والرفع إلى TestFlight ====================
+2026-11-20 08:11:32.484 xcodebuild[12501:41035] [MT] IDEDistribution: -[IDEDistributionLogging _createLoggingBundleAtPath:]: Created bundle at path "/var/folders/q2/p1t6rgxj5fj32g1dc7dmd49r0000gn/T/Runner_2026-11-20_08-11-32.477.xcdistributionlogs".
+2026-11-20 08:11:59.003 xcodebuild[12501:41035] Starting upload
+2026-11-20 08:11:59.700 xcodebuild[12501:41091] Progress 0%: Making copy of ‘qitaat.ipa’…
+2026-11-20 08:11:59.701 xcodebuild[12501:41091] Progress 0%: Making copy of ‘qitaat.ipa’…
+2026-11-20 08:11:59.702 xcodebuild[12501:41091] Progress 0%: Preparing to upload ‘qitaat.ipa’…
+2026-11-20 08:12:25.123 xcodebuild[12501:41091] Progress 0%: Analyzing package…
+2026-11-20 08:12:25.921 xcodebuild[12501:41092] Progress 0%: Sending analysis to App Store Connect…
+2026-11-20 08:12:26.811 xcodebuild[12501:41092] Progress 0%: Waiting for App Store Connect analysis response…
+2026-11-20 08:12:27.911 xcodebuild[12501:41092] Progress 0%: Waiting for App Store Connect analysis response…
+2026-11-20 08:12:49.939 xcodebuild[12501:41092] Progress 0%: Sending SPI analysis to App Store Connect…
+2026-11-20 08:12:51.001 xcodebuild[12501:41092] Progress 0%: Waiting for App Store Connect SPI analysis response…
+2026-11-20 08:12:52.263 xcodebuild[12501:41092] Progress 0%: Waiting for App Store Connect SPI analysis response…
+2026-11-20 08:13:08.048 xcodebuild[12501:41092] Progress 0%: Requesting upload instructions from App Store Connect…
+2026-11-20 08:13:08.675 xcodebuild[12501:41092] Progress 0%: Preparing file for upload to App Store Connect…
+2026-11-20 08:13:08.689 xcodebuild[12501:41092] Progress 0%: Preparing file for upload to App Store Connect…
+2026-11-20 08:13:08.690 xcodebuild[12501:41092] Progress 0%: Uploading to App Store Connect…
+2026-11-20 08:13:08.841 xcodebuild[12501:41092] Progress 22%: Uploading to App Store Connect…
+2026-11-20 08:13:08.844 xcodebuild[12501:41092] Progress 22%: Uploading to App Store Connect…
+2026-11-20 08:13:09.351 xcodebuild[12501:41092] Progress 22%: Completing upload…
+2026-11-20 08:13:10.593 xcodebuild[12501:50754] Progress 22%: Waiting for package to begin processing…
+2026-11-20 08:13:10.729 xcodebuild[12501:50754] Progress 22%: Uploaded package is processing.
+2026-11-20 08:13:10.739 xcodebuild[12501:50754] Progress 22%: Upload succeeded.
+warning: exportArchive App Store Connect Warning. SDK version issue. This app was built with the iOS 26.5 SDK. Starting April 2027, iOS and iPadOS apps must be built with the iOS 27 SDK or later, included in Xcode 27 or later, in order to be uploaded to App Store Connect or submitted for distribution.
+
+Uploaded Runner
+** EXPORT SUCCEEDED **
+
+
+==================== ✅ اكتمل — النسخة 111 مرفوعة إلى TestFlight (تظهر خلال ١٠–٢٠ دقيقة) ====================

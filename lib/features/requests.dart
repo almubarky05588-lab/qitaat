@@ -17,40 +17,93 @@ String normAr(String s) => latinDigits(s).replaceAll(RegExp('[أإآ]'), 'ا').r
 
 /// نافذة اختيار من قائمة — يظهر فيها بحث تلقائياً إذا كانت القائمة طويلة
 void pickFromSheet(BuildContext context, String title, List<String> options, ValueChanged<String> onPick, {String? selected, Map<String, String> subs = const {}}) {
-  final searchable = options.length > 14;
+  // القوائم الطويلة (المدن، الماركات، السنوات) تطلع قائمة مرتبة بسطور، والقصيرة أزرار
+  final long = options.length > 14;
+  final grouped = subs.isNotEmpty; // المدن: عناوين حروف + المنطقة تحت كل مدينة
   var q = '';
+  void pick(String o) {
+    onPick(o);
+    Navigator.pop(context);
+  }
+
   showAppSheet(
     context,
     StatefulBuilder(builder: (ctx, set) {
       final nq = normAr(q);
       final list = nq.isEmpty ? options : options.where((o) => normAr(o).contains(nq) || normAr(subs[o] ?? '').contains(nq)).toList();
+      Widget body;
+      if (list.isEmpty) {
+        body = Padding(padding: const EdgeInsets.symmetric(vertical: 24), child: Text('لا توجد نتائج', textAlign: TextAlign.center, style: tx(14, c: AppColors.mute)));
+      } else if (!long) {
+        body = SingleChildScrollView(
+          child: SizedBox(
+            width: double.infinity,
+            child: Wrap(spacing: 8, runSpacing: 10, children: [for (final o in list) AppChip(o, selected: o == selected, onTap: () => pick(o))]),
+          ),
+        );
+      } else {
+        // سطور مرتبة مع عناوين الحروف (بدون عناوين أثناء البحث)
+        final rows = <Object>[];
+        String? letter;
+        for (final o in list) {
+          if (grouped && nq.isEmpty) {
+            final n = normAr(o);
+            final l = n.isEmpty ? '' : n.substring(0, 1);
+            if (l != letter) rows.add(letter = l);
+          }
+          rows.add(_Opt(o));
+        }
+        body = ListView.builder(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          itemCount: rows.length,
+          itemBuilder: (_, i) {
+            final r = rows[i];
+            if (r is String) {
+              return Padding(
+                padding: EdgeInsets.only(top: i == 0 ? 0 : 14, bottom: 4),
+                child: Text(r, style: tx(13, w: w6, c: AppColors.pri)),
+              );
+            }
+            final o = (r as _Opt).v;
+            final sel = o == selected;
+            final sub = subs[o];
+            final last = i == rows.length - 1 || rows[i + 1] is String;
+            return InkWell(
+              onTap: () => pick(o),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 4),
+                decoration: BoxDecoration(border: last ? null : const Border(bottom: BorderSide(color: AppColors.line))),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(o, style: tx(16, w: sel ? w6 : w5, c: sel ? AppColors.pri : AppColors.ink)),
+                      if (sub != null && sub != o) Text(sub, style: tx(12, c: AppColors.mute)),
+                    ]),
+                  ),
+                  if (sel) const Icon(LucideIcons.check, size: 20, color: AppColors.pri),
+                ]),
+              ),
+            );
+          },
+        );
+      }
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(title, style: tx(18, w: w6)),
-        if (searchable) ...[
+        if (long) ...[
           const SizedBox(height: 12),
           AppField(hint: 'ابحث...', icon: LucideIcons.search, fill: AppColors.bg, onChanged: (t) => set(() => q = t)),
         ],
-        const SizedBox(height: 12),
-        ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: searchable ? MediaQuery.of(ctx).size.height * 0.45 : 380),
-          child: list.isEmpty
-              ? Padding(padding: const EdgeInsets.symmetric(vertical: 24), child: Text('لا توجد نتائج', textAlign: TextAlign.center, style: tx(14, c: AppColors.mute)))
-              : SingleChildScrollView(
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: Wrap(spacing: 8, runSpacing: 10, children: [
-                      for (final o in list)
-                        AppChip(o, selected: o == selected, onTap: () {
-                          onPick(o);
-                          Navigator.pop(context);
-                        }),
-                    ]),
-                  ),
-                ),
-        ),
+        const SizedBox(height: 8),
+        ConstrainedBox(constraints: BoxConstraints(maxHeight: long ? MediaQuery.of(ctx).size.height * 0.5 : 380), child: body),
       ]);
     }),
   );
+}
+
+class _Opt {
+  final String v;
+  const _Opt(this.v);
 }
 
 /// اختيار تصنيف القطعة (12 تصنيف بأمثلة توضيحية)

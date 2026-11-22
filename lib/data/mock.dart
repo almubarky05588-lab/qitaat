@@ -66,7 +66,7 @@ class Mock {
   /// تحميل القوائم من القاعدة (لوحة الإدارة تتحكم فيها)
   static Future<void> load() async {
     try {
-      final rows = await sb.from('catalog').select('kind,value,parent,popular,hint').eq('active', true).order('sort');
+      final rows = await sb.from('catalog').select('kind,value,parent,popular,hint').eq('active', true).order('sort', ascending: true);
       List<String> of(String k) => rows.where((r) => r['kind'] == k).map<String>((r) => '${r['value']}').toList();
       final b = of('brand');
       if (b.isNotEmpty) {

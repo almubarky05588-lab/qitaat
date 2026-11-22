@@ -50,7 +50,7 @@ class PromoBanner {
 
 /// البنرات الفعّالة فقط (مفعّلة وضمن مدة العرض) — لو ما فيه ولا واحد يختفي القسم كامل
 final bannersProvider = FutureProvider<List<PromoBanner>>((ref) async {
-  final r = await sb.from('banners').select().eq('active', true).order('sort');
+  final r = await sb.from('banners').select().eq('active', true).order('sort', ascending: true);
   final now = DateTime.now();
   bool live(Map j) {
     final s = DateTime.tryParse('${j['starts_at'] ?? ''}'), e = DateTime.tryParse('${j['ends_at'] ?? ''}');

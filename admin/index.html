@@ -151,7 +151,7 @@ td .sub{display:block;color:var(--mute);font-size:11.5px}
     <div id="stepCode" class="hidden">
       <div class="field"><label>رمز التحقق</label><input id="lCode" class="in ltr" inputmode="numeric" maxlength="4" placeholder="••••" style="text-align:center;letter-spacing:8px;font-size:20px"></div>
       <button class="btn block" id="lVerify">دخول</button>
-      <p class="muted" style="font-size:12px;text-align:center;margin:12px 0 0">نسخة تجريبية — الرمز: 1234 · <a href="#" id="lBack">تعديل الرقم</a></p>
+      <p class="muted" style="font-size:12px;text-align:center;margin:12px 0 0">أرسلنا الرمز برسالة نصية · <a href="#" id="lBack">تعديل الرقم</a></p>
     </div>
     <p id="lErr" class="hidden" style="color:var(--red);margin:12px 0 0;text-align:center"></p>
   </div>
@@ -1142,9 +1142,16 @@ function showLogin(err) {
   $('#app').classList.add('hidden'); $('#login').classList.remove('hidden');
   $('#lErr').classList.toggle('hidden', !err); $('#lErr').textContent = err || '';
 }
-$('#lSend').onclick = () => {
+$('#lSend').onclick = async () => {
   if (!/^0?5\d{8}$/.test($('#lPhone').value.replace(/\D/g, '').replace(/^966/, ''))) { $('#lErr').textContent = 'اكتب رقم جوال صحيح'; $('#lErr').classList.remove('hidden'); return; }
-  $('#lErr').classList.add('hidden'); $('#stepPhone').classList.add('hidden'); $('#stepCode').classList.remove('hidden'); $('#lCode').focus();
+  const btn = $('#lSend'); btn.disabled = true; btn.textContent = 'جاري الإرسال...';
+  try {
+    const r = await fetch(SB_URL + '/functions/v1/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }, body: JSON.stringify({ phone: $('#lPhone').value }) });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    $('#lErr').classList.add('hidden'); $('#stepPhone').classList.add('hidden'); $('#stepCode').classList.remove('hidden'); $('#lCode').value = ''; $('#lCode').focus();
+  } catch (e) { $('#lErr').textContent = errMsg(e); $('#lErr').classList.remove('hidden'); }
+  btn.disabled = false; btn.textContent = 'أرسل رمز التحقق';
 };
 $('#lBack').onclick = (e) => { e.preventDefault(); $('#stepCode').classList.add('hidden'); $('#stepPhone').classList.remove('hidden'); };
 $('#lCode').oninput = () => $('#lCode').value.length === 4 && $('#lVerify').click();

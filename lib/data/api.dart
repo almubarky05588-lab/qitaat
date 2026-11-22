@@ -543,7 +543,14 @@ const _listingSel = '*, seller:profiles!listings_seller_id_fkey(*), bids(amount,
 const _orderSel = '*, seller:profiles!orders_seller_id_fkey(*), buyer:profiles!orders_buyer_id_fkey(*), order_photos(side,url), listing:listings(images)';
 
 class Api {
-  // تسجيل الدخول برقم الجوال (الرمز مؤقتاً 1234 إلى أن يُربط مزوّد الرسائل)
+  /// إرسال رمز التحقق SMS (تقنيات) — الرمز صالح 5 دقائق
+  static Future<void> sendOtp(String phone) async {
+    final res = await sb.functions.invoke('send-otp', body: {'phone': phone});
+    final data = res.data is Map ? Map<String, dynamic>.from(res.data) : <String, dynamic>{};
+    if (data['error'] != null) throw Exception(data['error']);
+  }
+
+  // تسجيل الدخول برقم الجوال ورمز التحقق المرسل SMS
   static Future<void> phoneLogin({required String phone, required String code, String? role, String? name, String? city}) async {
     final res = await sb.functions.invoke('phone-login', body: {'phone': phone, 'code': code, 'role': role, 'name': name, 'city': city});
     final data = res.data is Map ? Map<String, dynamic>.from(res.data) : <String, dynamic>{};

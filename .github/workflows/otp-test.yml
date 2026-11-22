@@ -1,0 +1,19 @@
+name: OTP test
+
+on:
+  workflow_dispatch:
+    inputs:
+      phone:
+        description: رقم الجوال (5xxxxxxxx)
+        required: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: إرسال رمز تجريبي
+        run: |
+          URL=$(grep -oP "supabaseUrl = '\K[^']+" lib/data/api.dart)
+          KEY=$(grep -A1 -P "supabaseAnonKey =" lib/data/api.dart | grep -oP "'\K[^']+" | head -1)
+          curl -sS -X POST "$URL/functions/v1/send-otp" -H "Content-Type: application/json" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -d "{\"phone\":\"${{ inputs.phone }}\"}"; echo

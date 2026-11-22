@@ -128,7 +128,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   void _pickCity() => pickFromSheet(context, 'اختر مدينتك', Mock.cities, (c) => setState(() => city = c), selected: city, subs: Mock.cityRegions);
 
-  void _continue() {
+  bool sending = false;
+
+  Future<void> _continue() async {
+    if (sending) return;
     final p = normalizePhone(phone);
     if (p == null) {
       showToast(context, 'اكتب رقم جوال صحيح يبدأ بـ 5 (9 أرقام)');
@@ -151,7 +154,15 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       role: widget.login ? null : (role == UserRole.merchant ? 'merchant' : 'buyer'),
       login: widget.login,
     );
-    context.push('/otp');
+    setState(() => sending = true);
+    try {
+      await Api.sendOtp(p);
+      if (mounted) context.push('/otp');
+    } catch (e) {
+      if (mounted) showToast(context, errMsg(e));
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
   }
 
   @override
@@ -233,7 +244,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     ),
                   ]),
                 ),
-              AppButton('أرسل رمز التحقق', icon: LucideIcons.arrowLeft, disabled: !login && !agree, onTap: _continue),
+              AppButton(sending ? 'جاري الإرسال...' : 'أرسل رمز التحقق', icon: LucideIcons.arrowLeft, disabled: (!login && !agree) || sending, onTap: _continue),
               Center(
                 child: GestureDetector(
                   onTap: () => login ? context.go('/signup') : context.push('/login'),
@@ -262,7 +273,7 @@ class OtpScreen extends ConsumerStatefulWidget {
 class _OtpScreenState extends ConsumerState<OtpScreen> {
   final ctrl = TextEditingController();
   final focus = FocusNode();
-  int seconds = 45;
+  int seconds = 60;
   Timer? timer;
   bool busy = false;
 
@@ -275,7 +286,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
 
   void _start() {
     timer?.cancel();
-    seconds = 45;
+    seconds = 60;
     timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
       setState(() {
@@ -294,6 +305,20 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     ctrl.dispose();
     focus.dispose();
     super.dispose();
+  }
+
+  Future<void> _resend() async {
+    final d = ref.read(signupDraftProvider);
+    if (d == null) return;
+    try {
+      await Api.sendOtp(d.phone);
+      if (!mounted) return;
+      ctrl.clear();
+      setState(_start);
+      showToast(context, 'أرسلنا رمز جديد');
+    } catch (e) {
+      if (mounted) showToast(context, errMsg(e));
+    }
   }
 
   Future<void> _confirm() async {
@@ -381,7 +406,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                 ),
                 const SizedBox(height: 24),
                 GestureDetector(
-                  onTap: seconds == 0 ? () => setState(_start) : null,
+                  onTap: seconds == 0 ? _resend : null,
                   child: Text.rich(TextSpan(style: tx(14, c: AppColors.mute), children: [
                     TextSpan(text: seconds == 0 ? 'أعد إرسال الرمز' : 'إعادة إرسال الرمز بعد '),
                     if (seconds > 0) TextSpan(text: mm, style: tx(14, w: w5, c: AppColors.pri)),
@@ -392,8 +417,6 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                   onTap: () => context.pop(),
                   child: Text('تعديل رقم الجوال', style: tx(14, w: w5, c: AppColors.teal)),
                 ),
-                const SizedBox(height: 10),
-                Text('نسخة تجريبية — الرمز: 1234', style: tx(12, c: AppColors.ph)),
               ]),
             ),
           ),

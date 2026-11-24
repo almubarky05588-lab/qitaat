@@ -12,7 +12,7 @@ import 'account.dart' show myListingsProvider, payoutProvider;
 import 'catalog.dart' show openChat;
 import 'checkout.dart' show orderProvider;
 import 'orders.dart' show orderBadge;
-import 'requests.dart' show pickFromSheet;
+import 'requests.dart' show pickFromSheet, pickBrand;
 
 Widget _gradientCard({required List<Widget> children}) => ClipRRect(
       borderRadius: BorderRadius.circular(24),
@@ -672,7 +672,7 @@ class _SellPartScreenState extends ConsumerState<SellPartScreen> {
                 key: ValueKey('b$i${f.brand}'),
                 value: f.brand,
                 chevron: true,
-                onTap: () => pickFromSheet(context, 'الشركة', Mock.allBrands, (v) => _setFit(i, Fitment(v, model: Mock.modelsOf(v).first, from: f.from, to: f.to)), selected: f.brand)),
+                onTap: () => pickBrand(context, 'الشركة', (v) => _setFit(i, Fitment(v, model: Mock.modelsOf(v).first, from: f.from, to: f.to)), selected: f.brand)),
           ),
           const SizedBox(width: 8),
           Expanded(

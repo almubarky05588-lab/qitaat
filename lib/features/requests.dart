@@ -101,6 +101,101 @@ void pickFromSheet(BuildContext context, String title, List<String> options, Val
   );
 }
 
+/// كل الماركات مرتبة أبجدياً (للنوافذ: عناوين حروف + الاسم الإنجليزي تحت العربي)
+List<String> sortedBrands() => [...Mock.allBrands.toSet()]..sort((a, b) => normAr(a).compareTo(normAr(b)));
+
+/// اختيار ماركة واحدة
+void pickBrand(BuildContext context, String title, ValueChanged<String> onPick, {String? selected}) =>
+    pickFromSheet(context, title, sortedBrands(), onPick, selected: selected, subs: Mock.brandLatin);
+
+/// اختيار متعدد من قائمة طويلة: سطور بعلامة صح + بحث + عناوين حروف + زر تأكيد
+void pickManyFromSheet(BuildContext context, String title, List<String> options, Set<String> selected, ValueChanged<Set<String>> onDone,
+    {Map<String, String> subs = const {}}) {
+  final sel = {...selected};
+  var q = '';
+  showAppSheet(
+    context,
+    StatefulBuilder(builder: (ctx, set) {
+      final nq = normAr(q);
+      final list = nq.isEmpty ? options : options.where((o) => normAr(o).contains(nq) || normAr(subs[o] ?? '').contains(nq)).toList();
+      final rows = <Object>[];
+      String? letter;
+      for (final o in list) {
+        if (subs.isNotEmpty && nq.isEmpty) {
+          final n = normAr(o);
+          final l = n.isEmpty ? '' : n.substring(0, 1);
+          if (l != letter) rows.add(letter = l);
+        }
+        rows.add(_Opt(o));
+      }
+      final all = options.every(sel.contains);
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(child: Text(title, style: tx(18, w: w6))),
+          GestureDetector(
+            onTap: () => set(() => all ? sel.clear() : sel.addAll(options)),
+            child: Text(all ? 'إلغاء الكل' : 'تحديد الكل', style: tx(14, w: w5, c: AppColors.pri)),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        AppField(hint: 'ابحث بالعربي أو الإنجليزي...', icon: LucideIcons.search, fill: AppColors.bg, onChanged: (t) => set(() => q = t)),
+        const SizedBox(height: 8),
+        ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.5),
+          child: rows.isEmpty
+              ? Padding(padding: const EdgeInsets.symmetric(vertical: 24), child: Text('لا توجد نتائج', textAlign: TextAlign.center, style: tx(14, c: AppColors.mute)))
+              : ListView.builder(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  itemCount: rows.length,
+                  itemBuilder: (_, i) {
+                    final r = rows[i];
+                    if (r is String) {
+                      return Padding(padding: EdgeInsets.only(top: i == 0 ? 0 : 14, bottom: 4), child: Text(r, style: tx(13, w: w6, c: AppColors.pri)));
+                    }
+                    final o = (r as _Opt).v;
+                    final on = sel.contains(o);
+                    final sub = subs[o];
+                    final last = i == rows.length - 1 || rows[i + 1] is String;
+                    return InkWell(
+                      onTap: () => set(() => on ? sel.remove(o) : sel.add(o)),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+                        decoration: BoxDecoration(border: last ? null : const Border(bottom: BorderSide(color: AppColors.line))),
+                        child: Row(children: [
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: on ? AppColors.pri : Colors.transparent,
+                              borderRadius: BorderRadius.circular(7),
+                              border: Border.all(color: on ? AppColors.pri : AppColors.outline, width: 1.6),
+                            ),
+                            child: on ? const Icon(LucideIcons.check, size: 16, color: AppColors.onPri) : null,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(o, style: tx(16, w: on ? w6 : w5)),
+                              if (sub != null && sub != o) Text(sub, style: tx(12, c: AppColors.mute)),
+                            ]),
+                          ),
+                        ]),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        const SizedBox(height: 12),
+        AppButton(sel.isEmpty ? 'تم' : 'تم — ${sel.length} مختارة', onTap: () {
+          Navigator.pop(ctx);
+          onDone(sel);
+        }),
+      ]);
+    }),
+  );
+}
+
 class _Opt {
   final String v;
   const _Opt(this.v);
@@ -276,7 +371,7 @@ class _RequestPartScreenState extends ConsumerState<RequestPartScreen> {
                 key: ValueKey('b$brand'),
                 value: brand,
                 chevron: true,
-                onTap: () => pickFromSheet(context, 'نوع السيارة', Mock.allBrands, (v) => setState(() {
+                onTap: () => pickBrand(context, 'نوع السيارة', (v) => setState(() {
                       brand = v;
                       model = Mock.modelsOf(v).first;
                     })))),

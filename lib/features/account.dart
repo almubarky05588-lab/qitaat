@@ -16,7 +16,7 @@ import '../data/api.dart';
 import '../data/mock.dart';
 import 'checkout.dart' show myOrdersProvider;
 import 'map_picker.dart';
-import 'requests.dart' show pickFromSheet;
+import 'requests.dart' show pickFromSheet, pickBrand, pickManyFromSheet, sortedBrands;
 import 'social.dart' show openTicketSheet;
 import 'store.dart' show ProfileCover, BioAndSocials, ExpandableChips;
 
@@ -668,7 +668,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           _verifyCard(p),
           ToggleRow(title: 'أستقبل طلبات القطع من العملاء', sub: 'أوقفه لو ما تبي تصلك طلبات القطع الموجّهة لتخصصك', value: receive, onChanged: (v) => setState(() => receive = v)),
           LabeledField('تخصص المحل — الماركات',
-              ChipWrap(Mock.allBrands.toSet().toList(), selected: brands, px: 14, py: 8, onTap: (b) => setState(() => brands.contains(b) ? brands.remove(b) : brands.add(b))),
+              _BrandsField(brands, (v) => setState(() => brands = {...v})),
               required: true),
           Text('طلبات هذه الماركات فقط تصلك (أساس المطابقة)', style: tx(12, c: AppColors.mute)),
           LabeledField('أصناف القطع (اختياري)', ChipWrap(Mock.categories, selected: cats, teal: true, px: 14, py: 8, onTap: (c) => setState(() => cats.contains(c) ? cats.remove(c) : cats.add(c)))),
@@ -761,7 +761,7 @@ class _MyCarsScreenState extends ConsumerState<MyCarsScreen> {
                   key: ValueKey('b$brand'),
                   value: brand,
                   chevron: true,
-                  onTap: () => pickFromSheet(context, 'الماركة', Mock.allBrands, (x) => setState(() {
+                  onTap: () => pickBrand(context, 'الماركة', (x) => setState(() {
                         brand = x;
                         model = Mock.modelsOf(x).first;
                       })))),
@@ -867,6 +867,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ]),
         Center(child: Text('الإصدار 2.0', style: tx(12, c: AppColors.mute))),
       ],
+    );
+  }
+}
+
+
+/// حقل تخصص الماركات: الماركات المختارة كشرائح صغيرة (تنحذف بلمسة) + زر يفتح نافذة الاختيار
+class _BrandsField extends StatelessWidget {
+  const _BrandsField(this.selected, this.onChanged);
+  final Set<String> selected;
+  final ValueChanged<Set<String>> onChanged;
+
+  void _open(BuildContext context) =>
+      pickManyFromSheet(context, 'الماركات اللي تبيع قطعها', sortedBrands(), selected, onChanged, subs: Mock.brandLatin);
+
+  @override
+  Widget build(BuildContext context) {
+    if (selected.isEmpty) {
+      return AppField(hint: 'اختر الماركات', icon: LucideIcons.car, chevron: true, onTap: () => _open(context));
+    }
+    final all = Mock.allBrands.toSet().every(selected.contains);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.line)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (all)
+          Text('كل الماركات (${selected.length})', style: tx(15, w: w6))
+        else
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final b in selected)
+              GestureDetector(
+                onTap: () => onChanged({...selected}..remove(b)),
+                child: Container(
+                  padding: const EdgeInsetsDirectional.fromSTEB(12, 7, 8, 7),
+                  decoration: BoxDecoration(color: AppColors.pink, borderRadius: BorderRadius.circular(999)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text(b, style: tx(13, w: w5, c: AppColors.pri)),
+                    const SizedBox(width: 4),
+                    const Icon(LucideIcons.x, size: 14, color: AppColors.pri),
+                  ]),
+                ),
+              ),
+          ]),
+        const SizedBox(height: 12),
+        GestureDetector(
+          onTap: () => _open(context),
+          child: Row(children: [
+            const Icon(LucideIcons.pencil, size: 16, color: AppColors.teal),
+            const SizedBox(width: 6),
+            Text('تعديل الماركات', style: tx(14, w: w5, c: AppColors.teal)),
+          ]),
+        ),
+      ]),
     );
   }
 }

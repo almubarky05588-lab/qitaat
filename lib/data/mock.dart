@@ -5,7 +5,12 @@
 import 'api.dart';
 
 class Mock {
-  static List<String> brands = ['تويوتا', 'لكزس', 'نيسان', 'إنفينيتي', 'هوندا', 'أكيورا', 'هيونداي'];
+  static List<String> brands = ['تويوتا', 'لكزس', 'جي إم سي', 'هيونداي', 'نيسان', 'كيا', 'شيفروليه', 'فورد'];
+  /// الاسم الإنجليزي وشعار كل ماركة (من لوحة الإدارة)
+  static Map<String, String> brandLatin = {
+    'تويوتا': 'Toyota', 'لكزس': 'Lexus', 'جي إم سي': 'GMC', 'هيونداي': 'Hyundai', 'نيسان': 'Nissan', 'كيا': 'Kia', 'شيفروليه': 'Chevrolet', 'فورد': 'Ford',
+  };
+  static Map<String, String> brandLogo = {};
   static List<String> allBrands = [
     'تويوتا', 'لكزس', 'نيسان', 'إنفينيتي', 'هوندا', 'أكيورا', 'ميتسوبيشي', 'مازدا', 'سوزوكي', 'سوبارو',
     'جي إم سي', 'شيفروليه', 'كاديلاك', 'فورد', 'لينكولن', 'دودج', 'رام', 'كرايسلر', 'جيب', 'تسلا',
@@ -66,13 +71,16 @@ class Mock {
   /// تحميل القوائم من القاعدة (لوحة الإدارة تتحكم فيها)
   static Future<void> load() async {
     try {
-      final rows = await sb.from('catalog').select('kind,value,parent,popular,hint').eq('active', true).order('sort', ascending: true);
+      final rows = await sb.from('catalog').select('kind,value,parent,popular,hint,latin,image_url').eq('active', true).order('sort', ascending: true);
       List<String> of(String k) => rows.where((r) => r['kind'] == k).map<String>((r) => '${r['value']}').toList();
       final b = of('brand');
       if (b.isNotEmpty) {
         allBrands = b;
         final pop = rows.where((r) => r['kind'] == 'brand' && r['popular'] == true).map<String>((r) => '${r['value']}').toList();
-        brands = pop.isNotEmpty ? pop : b.take(7).toList();
+        brands = pop.isNotEmpty ? pop : b.take(8).toList();
+        final br = rows.where((r) => r['kind'] == 'brand');
+        brandLatin = {for (final r in br.where((r) => (r['latin'] ?? '').toString().isNotEmpty)) '${r['value']}': '${r['latin']}'};
+        brandLogo = {for (final r in br.where((r) => (r['image_url'] ?? '').toString().isNotEmpty)) '${r['value']}': '${r['image_url']}'};
       }
       final c = of('category');
       if (c.isNotEmpty) {

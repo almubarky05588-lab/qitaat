@@ -153,11 +153,19 @@ class AccountScreen extends ConsumerWidget {
                 onTap: () => showAppSheet(
                   context,
                   VCol(gap: 14, [
-                    Text('تسجيل كتاجر', style: tx(18, w: w6)),
-                    Text('حساب التاجر يكون برقم جوال منفصل عن حساب المشتري. سجّل خروج وأنشئ حساب جديد واختر «تاجر / مورد».', style: tx(14, c: AppColors.ink2)),
-                    AppButton('تسجيل خروج وإنشاء حساب تاجر', onTap: () {
+                    Text('تحويل حسابك لتاجر', style: tx(18, w: w6)),
+                    Text('بنفس رقم جوالك يتحول حسابك لحساب تاجر / مورد: تعرض قطعك وتستقبل طلبات العملاء وترسل عروض أسعار. بعد التحويل كمّل بيانات محلك (الاسم، المدينة، السجل التجاري والموقع).', style: tx(14, c: AppColors.ink2)),
+                    AppButton('حوّل حسابي لتاجر', icon: LucideIcons.store, iconFirst: true, onTap: () async {
                       Navigator.pop(context);
-                      logout(context, ref);
+                      try {
+                        await sb.rpc('become_merchant');
+                        ref.invalidate(myProfileProvider);
+                        if (!context.mounted) return;
+                        showToast(context, 'تم تحويل حسابك لتاجر — كمّل بيانات محلك');
+                        context.push('/edit-profile');
+                      } catch (e) {
+                        if (context.mounted) showToast(context, errMsg(e));
+                      }
                     }),
                   ]),
                 ),

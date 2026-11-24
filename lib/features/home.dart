@@ -11,6 +11,7 @@ import '../core/widgets.dart';
 import '../data/api.dart';
 import '../data/mock.dart';
 import 'banners.dart';
+import 'requests.dart' show pickFromSheet, normAr;
 import 'merchant.dart' show customerRequestsProvider;
 
 final homeListingsProvider = FutureProvider<List<Listing>>((ref) => Api.listings(limit: 3));
@@ -98,13 +99,16 @@ class HomeScreen extends ConsumerWidget {
                   Expanded(child: _tile(AppIconsDuo.send, AppColors.tealBg, AppColors.teal, 'تطلب من الموردين', 'ما لقيتها؟ توصلك عروض أسعار', () => context.push('/request-part'))),
                 ]),
               ),
-              Text('تصفّح حسب الماركة', style: tx(18, w: w6)),
+              Row(children: [
+                Expanded(child: Text('تصفّح حسب الماركة', style: tx(18, w: w6))),
+                GestureDetector(
+                  onTap: () => _allBrands(context),
+                  child: Text('كل الماركات ←', style: tx(14, w: w5, c: AppColors.pri)),
+                ),
+              ]),
+              const _BrandGrid(),
             ]),
           ),
-          const SizedBox(height: 12),
-          ChipScroller(children: [
-            for (final b in Mock.brands) AppChip(b, noBorder: true, px: 20, py: 11, fs: 15, onTap: () => context.push('/search?brand=$b')),
-          ]),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
             child: VCol(gap: 14, [
@@ -192,6 +196,69 @@ class _CurrentOrderCard extends ConsumerWidget {
               })
             : AppButton(expired ? 'تفاصيل الطلب' : 'تتبّع الطلب', icon: LucideIcons.truck, v: BtnV.out, radius: 999, height: 46, fs: 14, onTap: () => context.push('/order/${o.id}')),
       ]),
+    );
+  }
+}
+
+
+/// كل الماركات مرتبة أبجدياً مع الاسم الإنجليزي والبحث بالعربي أو الإنجليزي
+void _allBrands(BuildContext context) {
+  final list = [...Mock.allBrands]..sort((a, b) => normAr(a).compareTo(normAr(b)));
+  pickFromSheet(context, 'كل الماركات', list, (b) => Future.microtask(() => context.mounted ? context.push('/search?brand=$b') : null), subs: Mock.brandLatin);
+}
+
+/// شبكة الماركات الشائعة 4×2 (تتحكم فيها لوحة الإدارة: الترتيب، الشعار، الاسم الإنجليزي)
+class _BrandGrid extends StatelessWidget {
+  const _BrandGrid();
+
+  @override
+  Widget build(BuildContext context) {
+    final items = Mock.brands.take(8).toList();
+    return LayoutBuilder(builder: (context, c) {
+      const gap = 10.0;
+      final w = (c.maxWidth - gap * 3) / 4;
+      return Wrap(spacing: gap, runSpacing: gap, children: [for (final b in items) SizedBox(width: w, child: _BrandTile(b))]);
+    });
+  }
+}
+
+class _BrandTile extends StatelessWidget {
+  const _BrandTile(this.brand);
+  final String brand;
+
+  @override
+  Widget build(BuildContext context) {
+    final latin = Mock.brandLatin[brand];
+    final logo = Mock.brandLogo[brand];
+    final mono = Container(
+      width: 38,
+      height: 38,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(color: AppColors.pink, shape: BoxShape.circle),
+      child: Text(((latin ?? brand).isEmpty ? '' : (latin ?? brand).substring(0, 1)).toUpperCase(), style: tx(16, w: w6, c: AppColors.pri)),
+    );
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => context.push('/search?brand=$brand'),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.line)),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(
+              height: 38,
+              child: logo == null
+                  ? mono
+                  : Image.network(logo, height: 38, width: 52, fit: BoxFit.contain, errorBuilder: (_, __, ___) => mono),
+            ),
+            const SizedBox(height: 8),
+            Text(brand, maxLines: 1, overflow: TextOverflow.ellipsis, style: tx(13, w: w6)),
+            if (latin != null) Text(latin, maxLines: 1, overflow: TextOverflow.ellipsis, style: tx(10, c: AppColors.mute)),
+          ]),
+        ),
+      ),
     );
   }
 }

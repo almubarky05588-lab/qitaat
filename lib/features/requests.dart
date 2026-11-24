@@ -110,7 +110,7 @@ void pickBrand(BuildContext context, String title, ValueChanged<String> onPick, 
 
 /// اختيار متعدد من قائمة طويلة: سطور بعلامة صح + بحث + عناوين حروف + زر تأكيد
 void pickManyFromSheet(BuildContext context, String title, List<String> options, Set<String> selected, ValueChanged<Set<String>> onDone,
-    {Map<String, String> subs = const {}}) {
+    {Map<String, String> subs = const {}, bool grouped = true}) {
   final sel = {...selected};
   var q = '';
   showAppSheet(
@@ -121,7 +121,7 @@ void pickManyFromSheet(BuildContext context, String title, List<String> options,
       final rows = <Object>[];
       String? letter;
       for (final o in list) {
-        if (subs.isNotEmpty && nq.isEmpty) {
+        if (grouped && subs.isNotEmpty && nq.isEmpty) {
           final n = normAr(o);
           final l = n.isEmpty ? '' : n.substring(0, 1);
           if (l != letter) rows.add(letter = l);
@@ -138,7 +138,7 @@ void pickManyFromSheet(BuildContext context, String title, List<String> options,
           ),
         ]),
         const SizedBox(height: 12),
-        AppField(hint: 'ابحث بالعربي أو الإنجليزي...', icon: LucideIcons.search, fill: AppColors.bg, onChanged: (t) => set(() => q = t)),
+        AppField(hint: 'ابحث...', icon: LucideIcons.search, fill: AppColors.bg, onChanged: (t) => set(() => q = t)),
         const SizedBox(height: 8),
         ConstrainedBox(
           constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.5),

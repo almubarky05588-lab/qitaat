@@ -668,10 +668,28 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           _verifyCard(p),
           ToggleRow(title: 'أستقبل طلبات القطع من العملاء', sub: 'أوقفه لو ما تبي تصلك طلبات القطع الموجّهة لتخصصك', value: receive, onChanged: (v) => setState(() => receive = v)),
           LabeledField('تخصص المحل — الماركات',
-              _BrandsField(brands, (v) => setState(() => brands = {...v})),
+              _MultiField(
+                  title: 'الماركات اللي تبيع قطعها',
+                  hint: 'اختر الماركات',
+                  icon: LucideIcons.car,
+                  options: sortedBrands(),
+                  selected: brands,
+                  subs: Mock.brandLatin,
+                  allLabel: 'كل الماركات',
+                  onChanged: (v) => setState(() => brands = {...v})),
               required: true),
           Text('طلبات هذه الماركات فقط تصلك (أساس المطابقة)', style: tx(12, c: AppColors.mute)),
-          LabeledField('أصناف القطع (اختياري)', ChipWrap(Mock.categories, selected: cats, teal: true, px: 14, py: 8, onTap: (c) => setState(() => cats.contains(c) ? cats.remove(c) : cats.add(c)))),
+          LabeledField('أصناف القطع (اختياري)', _MultiField(
+                  title: 'أصناف القطع اللي تبيعها',
+                  hint: 'كل الأصناف — أو اختر أصناف محددة',
+                  icon: LucideIcons.layoutGrid,
+                  options: Mock.categories,
+                  selected: cats,
+                  subs: Mock.categoryHints,
+                  grouped: false,
+                  teal: true,
+                  allLabel: 'كل الأصناف',
+                  onChanged: (v) => setState(() => cats = {...v}))),
           Text('حدّدها لتضييق الطلبات لصنفك، أو اتركها لاستقبال كل الأصناف', style: tx(12, c: AppColors.mute)),
         ],
         const SizedBox(height: 8),
@@ -872,39 +890,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 }
 
 
-/// حقل تخصص الماركات: الماركات المختارة كشرائح صغيرة (تنحذف بلمسة) + زر يفتح نافذة الاختيار
-class _BrandsField extends StatelessWidget {
-  const _BrandsField(this.selected, this.onChanged);
+/// حقل اختيار متعدد (الماركات، الأصناف): المختار كشرائح صغيرة تنحذف بلمسة + زر يفتح نافذة الاختيار
+class _MultiField extends StatelessWidget {
+  const _MultiField({required this.title, required this.hint, required this.icon, required this.options, required this.selected, required this.onChanged, this.subs = const {}, this.grouped = true, this.allLabel, this.teal = false});
+  final String title, hint;
+  final IconData icon;
+  final List<String> options;
   final Set<String> selected;
   final ValueChanged<Set<String>> onChanged;
+  final Map<String, String> subs;
+  final bool grouped, teal;
+  final String? allLabel;
 
-  void _open(BuildContext context) =>
-      pickManyFromSheet(context, 'الماركات اللي تبيع قطعها', sortedBrands(), selected, onChanged, subs: Mock.brandLatin);
+  void _open(BuildContext context) => pickManyFromSheet(context, title, options, selected, onChanged, subs: subs, grouped: grouped);
 
   @override
   Widget build(BuildContext context) {
     if (selected.isEmpty) {
-      return AppField(hint: 'اختر الماركات', icon: LucideIcons.car, chevron: true, onTap: () => _open(context));
+      return AppField(hint: hint, icon: icon, chevron: true, onTap: () => _open(context));
     }
-    final all = Mock.allBrands.toSet().every(selected.contains);
+    final all = options.isNotEmpty && options.every(selected.contains);
+    final bg = teal ? AppColors.tealBg : AppColors.pink, fg = teal ? AppColors.teal : AppColors.pri;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.line)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (all)
-          Text('كل الماركات (${selected.length})', style: tx(15, w: w6))
+          Text('${allLabel ?? 'الكل'} (${selected.length})', style: tx(15, w: w6))
         else
           Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final b in selected)
+            for (final b in [for (final o in options) if (selected.contains(o)) o, ...selected.where((x) => !options.contains(x))])
               GestureDetector(
                 onTap: () => onChanged({...selected}..remove(b)),
                 child: Container(
                   padding: const EdgeInsetsDirectional.fromSTEB(12, 7, 8, 7),
-                  decoration: BoxDecoration(color: AppColors.pink, borderRadius: BorderRadius.circular(999)),
+                  decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(b, style: tx(13, w: w5, c: AppColors.pri)),
+                    Flexible(child: Text(b, style: tx(13, w: w5, c: fg))),
                     const SizedBox(width: 4),
-                    const Icon(LucideIcons.x, size: 14, color: AppColors.pri),
+                    Icon(LucideIcons.x, size: 14, color: fg),
                   ]),
                 ),
               ),
@@ -915,7 +939,7 @@ class _BrandsField extends StatelessWidget {
           child: Row(children: [
             const Icon(LucideIcons.pencil, size: 16, color: AppColors.teal),
             const SizedBox(width: 6),
-            Text('تعديل الماركات', style: tx(14, w: w5, c: AppColors.teal)),
+            Text('تعديل الاختيار', style: tx(14, w: w5, c: AppColors.teal)),
           ]),
         ),
       ]),

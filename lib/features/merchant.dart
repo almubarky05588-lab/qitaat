@@ -737,7 +737,7 @@ class _SellPartScreenState extends ConsumerState<SellPartScreen> {
           required: true,
           help: 'مثال: كامري 2018–2025 وراف فور 2018–2025. تأكيد التوافق مسؤولية البائع',
         ),
-        LabeledField('التصنيف', ChipWrap(Mock.categories, selected: {if (cat != null) cat!}, onTap: (c) => setState(() => cat = cat == c ? null : c))),
+        LabeledField('التصنيف', AppField(key: ValueKey('cat$cat'), hint: 'اختر التصنيف', value: cat, chevron: true, onTap: () => pickFromSheet(context, 'التصنيف', Mock.categories, (c) => setState(() => cat = c), selected: cat))),
         LabeledField('حالة القطعة (أصلية / مستعملة)', SelectGrid(options: Mock.sellConditions, selected: condition, onChanged: (v) => setState(() => condition = v)), required: true),
         LabeledField(
           'طريقة البيع',

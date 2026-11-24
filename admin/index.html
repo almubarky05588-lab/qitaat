@@ -1041,7 +1041,7 @@ VIEWS.notify = async (v, p) => {
 VIEWS.catalog = async (v) => {
   const kinds = [['brand', 'الماركات'], ['model', 'الموديلات'], ['category', 'تصنيفات القطع'], ['condition', 'حالات القطعة'], ['city', 'المدن'], ['carrier', 'شركات الشحن']];
   let kind = sessionStorage.getItem('ckind') || 'brand', parent = '';
-  v.innerHTML = `<div class="alert teal">أي تعديل هنا يظهر في التطبيق مباشرة عند المستخدمين (القوائم تتحدث عند فتح التطبيق).</div><div class="tabs" id="tb"></div><div id="res"></div>`;
+  v.innerHTML = `<div class="alert teal">أي تعديل هنا يظهر في التطبيق مباشرة عند المستخدمين (القوائم تتحدث عند فتح التطبيق). في الماركات: علّم «تظهر في الرئيسية» على 8 ماركات لتملأ شبكة الرئيسية، والشعار يُفضّل PNG بخلفية شفافة.</div><div class="tabs" id="tb"></div><div id="res"></div>`;
   const load = async () => {
     sessionStorage.setItem('ckind', kind);
     $('#tb').innerHTML = kinds.map((k) => `<button class="${k[0] === kind ? 'on' : ''}" data-k="${k[0]}">${k[1]}</button>`).join('');
@@ -1059,6 +1059,10 @@ VIEWS.catalog = async (v) => {
         ['الترتيب', (r) => `<input class="in" type="number" style="width:70px" data-sort="${r.id}" value="${r.sort}">`],
         ['القيمة', (r) => `<input class="in" data-val="${r.id}" value="${esc(r.value)}">`],
         ...(kind === 'category' ? [['أمثلة توضيحية', (r) => `<input class="in" data-hint="${r.id}" value="${esc(r.hint || '')}" placeholder="مثال: صدام، رفرف، كبوت">`]] : []),
+        ...(kind === 'brand' ? [
+          ['الشعار', (r) => `<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">${r.image_url ? `<img src="${esc(r.image_url)}" style="width:40px;height:40px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid var(--line)">` : `<span class="btn ghost sm">رفع صورة</span>`}<input type="file" accept="image/*" data-img="${r.id}" style="display:none"></label>${r.image_url ? ` <button class="btn ghost sm" data-imgdel="${r.id}" title="حذف الصورة">✕</button>` : ''}`],
+          ['الاسم بالإنجليزي', (r) => `<input class="in ltr" style="width:130px;text-align:left" data-lat="${r.id}" value="${esc(r.latin || '')}" placeholder="Toyota">`],
+        ] : []),
         ...(kind === 'brand' ? [['تظهر في الرئيسية', (r) => `<input type="checkbox" data-pop="${r.id}" ${r.popular ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--pri)">`]] : []),
         ['مفعّل', (r) => `<input type="checkbox" data-act="${r.id}" ${r.active ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--pri)">`],
         ['', (r) => `<button class="btn red sm" data-del="${r.id}">حذف</button>`],
@@ -1068,6 +1072,18 @@ VIEWS.catalog = async (v) => {
     $$('[data-sort]').forEach((x) => (x.onchange = () => upd(x.dataset.sort, { sort: +x.value })));
     $$('[data-val]').forEach((x) => (x.onchange = () => upd(x.dataset.val, { value: x.value.trim() })));
     $$('[data-hint]').forEach((x) => (x.onchange = () => upd(x.dataset.hint, { hint: x.value.trim() || null })));
+    $$('[data-lat]').forEach((x) => (x.onchange = () => upd(x.dataset.lat, { latin: x.value.trim() || null })));
+    $$('[data-imgdel]').forEach((x) => (x.onclick = async () => { await upd(x.dataset.imgdel, { image_url: null }); load(); }));
+    $$('[data-img]').forEach((x) => (x.onchange = async () => {
+      const f = x.files[0]; if (!f) return;
+      try {
+        const ext = (f.name.split('.').pop() || 'png').toLowerCase();
+        const path = `${ME.id}/brand-${x.dataset.img}-${Date.now()}.${ext}`;
+        await must(sb.storage.from('media').upload(path, f, { contentType: f.type || 'image/png', upsert: true }));
+        await upd(x.dataset.img, { image_url: sb.storage.from('media').getPublicUrl(path).data.publicUrl });
+        load();
+      } catch (e) { toast('خطأ: ' + errMsg(e)); }
+    }));
     $$('[data-pop]').forEach((x) => (x.onchange = () => upd(x.dataset.pop, { popular: x.checked })));
     $$('[data-act]').forEach((x) => (x.onchange = () => upd(x.dataset.act, { active: x.checked })));
     $$('[data-del]').forEach((x) => (x.onclick = async () => { if (confirm('حذف؟') && (await act(() => must(sb.from('catalog').delete().eq('id', x.dataset.del)), 'تم الحذف'))) { log('حذف من قائمة', 'catalog', x.dataset.del); load(); } }));

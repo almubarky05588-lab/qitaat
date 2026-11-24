@@ -1060,7 +1060,7 @@ VIEWS.catalog = async (v) => {
         ['القيمة', (r) => `<input class="in" data-val="${r.id}" value="${esc(r.value)}">`],
         ...(kind === 'category' ? [['أمثلة توضيحية', (r) => `<input class="in" data-hint="${r.id}" value="${esc(r.hint || '')}" placeholder="مثال: صدام، رفرف، كبوت">`]] : []),
         ...(kind === 'brand' ? [
-          ['الشعار', (r) => `<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">${r.image_url ? `<img src="${esc(r.image_url)}" style="width:40px;height:40px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid var(--line)">` : `<span class="btn ghost sm">رفع صورة</span>`}<input type="file" accept="image/*" data-img="${r.id}" style="display:none"></label>${r.image_url ? ` <button class="btn ghost sm" data-imgdel="${r.id}" title="حذف الصورة">✕</button>` : ''}`],
+          ['الشعار', (r) => `<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">${r.image_url ? `<img src="${esc(r.image_url)}" style="width:40px;height:40px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid var(--line)">` : `<span class="btn out sm">رفع صورة</span>`}<input type="file" accept="image/*" data-img="${r.id}" style="display:none"></label>${r.image_url ? ` <button class="btn out sm" data-imgdel="${r.id}" title="حذف الصورة">✕</button>` : ''}`],
           ['الاسم بالإنجليزي', (r) => `<input class="in ltr" style="width:130px;text-align:left" data-lat="${r.id}" value="${esc(r.latin || '')}" placeholder="Toyota">`],
         ] : []),
         ...(kind === 'brand' ? [['تظهر في الرئيسية', (r) => `<input type="checkbox" data-pop="${r.id}" ${r.popular ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--pri)">`]] : []),

@@ -67,11 +67,13 @@ class AppHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
       child: Row(children: [
         if (back)
+          // منطقة لمس كبيرة، ولو ما فيه صفحة قبلها يرجع للرئيسية بدل ما يعلق
           GestureDetector(
-            onTap: () => context.canPop() ? context.pop() : null,
-            child: const Icon(LucideIcons.arrowRight, size: 24, color: AppColors.ink),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => context.canPop() ? context.pop() : context.go('/home'),
+            child: const SizedBox(width: 44, height: 44, child: Align(alignment: AlignmentDirectional.centerStart, child: Icon(LucideIcons.arrowRight, size: 24, color: AppColors.ink))),
           ),
-        if (back) const SizedBox(width: 16),
+        if (back) const SizedBox(width: 6),
         Expanded(child: Text(title, style: tx(22, w: w5), overflow: TextOverflow.ellipsis)),
         for (final a in actions) Padding(padding: const EdgeInsetsDirectional.only(start: 16), child: a),
       ]),

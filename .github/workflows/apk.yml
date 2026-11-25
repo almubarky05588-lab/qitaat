@@ -1,0 +1,43 @@
+name: Android APK link
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate platform folders
+        run: |
+          if [ ! -d android ]; then
+            flutter create --org sa.almubarky --project-name qitaat --platforms=android,ios .
+            rm -f test/widget_test.dart
+          fi
+      - run: flutter pub get
+      - name: App icon
+        run: |
+          sudo apt-get install -y librsvg2-bin > /dev/null
+          rsvg-convert -w 1024 -h 1024 -b white assets/icon/app_icon.svg -o assets/icon/app_icon.png
+          dart run flutter_launcher_icons
+      - name: Android label and permissions
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i 's/android:label="[^"]*"/android:label="قطعة سيارتك"/' $M
+          grep -q 'permission.INTERNET' $M || sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' $M
+      - run: flutter build apk --release
+      - run: cp build/app/outputs/flutter-apk/app-release.apk qitaat.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android
+          name: قطعة سيارتك — نسخة أندرويد التجريبية
+          body: رابط التحميل المباشر للنسخة التجريبية على أندرويد.
+          make_latest: true
+          files: qitaat.apk
